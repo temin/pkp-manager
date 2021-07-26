@@ -24,6 +24,9 @@ case "$1" in
         appDataPath=""
         pkpAppDatabaseName=""
         pkpAppTestURL=""
+        pkpAppCodePath=""
+        pkpAppDataPath=""
+        pkpAppBackupRootPath=""
     ;;
     
     omp)
