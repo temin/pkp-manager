@@ -18,7 +18,7 @@ case "$1" in
         pkpAppDatabasePassword=""
     ;;
     
-    app1)
+    ojs)
         appWebRootDirName=""
         appCodePath="${pkpApp}"
         appDataPath=""
@@ -26,7 +26,7 @@ case "$1" in
         pkpAppTestURL=""
     ;;
     
-    app2)
+    omp)
         appWebRootDirName=""
         appCodePath="${pkpApp}"
         appDataPath=""

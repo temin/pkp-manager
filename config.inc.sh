@@ -18,8 +18,6 @@ source config-local.inc.sh "${pkpApp}"
 
 ## Directories
 pkpAppBackupRootPath="${pkpBackupRootPath}/${appWebRootDirName}"
-pkpAppCodePath="${pkpWebRootPath}/${pkpApp}"
-pkpAppDataPath="${pkpAppBackupRootPath}/${appDataPath}"
 pkpAppStorage="${pkpStorage}/${pkpApp}"
 pkpAppDownloads="${pkpAppStorage}/downloads"
 
