@@ -62,7 +62,7 @@ case "$subcommand" in
         checkIfRoot "${subcommand}"
         checkIfSSHKey
         syncBackupFiles
-        pkpConvertDatabase
+#         pkpConvertDatabase
     ;;
 
     sync-local-app)
@@ -115,9 +115,7 @@ case "$subcommand" in
     ;;
 
     test)
-        upgradePkpApp
-        fixCodeFilePermissions
-        fixDataFilePermissions
+        echo "OK!"
     ;;
     
     *)

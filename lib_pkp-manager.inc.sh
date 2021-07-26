@@ -87,7 +87,7 @@ function syncBackupFiles {
 
     echo "Syncing files from backupserver."
     
-    rsync -rlt --delete --info=progress2 ${backupUserServer}:${backupServerDirectory}/ ${pkpBackupRootPath}
+    rsync -rlt --delete --info=progress2 ${backupServerUser}:${backupServerDirectory}/ ${pkpBackupRootPath}
 
     }
 
@@ -176,8 +176,8 @@ function fixConfigurationFile {
     sed "/^\s*base_url/c\base_url = \"http://${pkpAppTestURL}\"" -i ${pkpConfigFilePath}/config.inc.php.${pkpAppCodeVersion}
     sed "/^\s*session_cookie_name/c\session_cookie_name = ${pkpApp^^}SID-test" -i ${pkpConfigFilePath}/config.inc.php.${pkpAppCodeVersion}
     sed '/^\s*driver/c\driver = mysqli' -i ${pkpConfigFilePath}/config.inc.php.${pkpAppCodeVersion}
-    sed "/^\s*username/c\username = ${pkpDatabaseUser}" -i ${pkpConfigFilePath}/config.inc.php.${pkpAppCodeVersion}
-    sed "/^\s*password/c\password = ${pkpDatabasePassword}" -i ${pkpConfigFilePath}/config.inc.php.${pkpAppCodeVersion}
+    sed "/^\s*username/c\username = ${pkpAppDatabaseUser}" -i ${pkpConfigFilePath}/config.inc.php.${pkpAppCodeVersion}
+    sed "/^\s*password/c\password = ${pkpAppDatabasePassword}" -i ${pkpConfigFilePath}/config.inc.php.${pkpAppCodeVersion}
     sed "/^\s*name/c\name = ${pkpAppDatabaseName}" -i ${pkpConfigFilePath}/config.inc.php.${pkpAppCodeVersion}
     sed "/^\s*cache/c\cache = none" -i ${pkpConfigFilePath}/config.inc.php.${pkpAppCodeVersion}
     sed "/^\s*files_dir/c\files_dir = ${pkpAppDataPath}" -i ${pkpConfigFilePath}/config.inc.php.${pkpAppCodeVersion}
@@ -197,7 +197,7 @@ function emptyDatabase {
     parseOutput emphasis "Deleting all tables from $pkpApp ($pkpAppDatabaseName) database."
     
     # Izbriši vse tabele - tudi tiste, ki so bile na novo ustvarjene med poskusi nadgradnje
-    mysqldump -u $pkpDatabaseUser -p$pkpDatabasePassword --add-drop-table --no-data $pkpAppDatabaseName | grep -e '^DROP' | (echo "SET FOREIGN_KEY_CHECKS=0;"; cat; echo "SET FOREIGN_KEY_CHECKS=1;") | mysql -u $pkpDatabaseUser -p$pkpDatabasePassword $pkpAppDatabaseName
+    mysqldump -u $pkpAppDatabaseUser -p$pkpAppDatabasePassword --add-drop-table --no-data $pkpAppDatabaseName | grep -e '^DROP' | (echo "SET FOREIGN_KEY_CHECKS=0;"; cat; echo "SET FOREIGN_KEY_CHECKS=1;") | mysql -u $pkpAppDatabaseUser -p$pkpAppDatabasePassword $pkpAppDatabaseName
 
     }
 
