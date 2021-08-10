@@ -1,3 +1,7 @@
+### Git Ignore File
+# https://git-scm.com/docs/gitignore
+# https://www.pluralsight.com/guides/how-to-use-gitignore-file
+
 ### Kate ###
 # Swap Files #
 .*.kate-swp
