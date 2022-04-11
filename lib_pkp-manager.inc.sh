@@ -225,8 +225,8 @@ function fixCodeFilePermissions {
 
     # Fix PKP application code ownership and permissions
     chown -R mitja:www-data ${pkpAppCodePath}
-    chmod 640 ${pkpAppCodePath}
-    find ${pkpAppCodePath} -type d -exec chmod 750 {} +
+    chmod 644 ${pkpAppCodePath}
+    find ${pkpAppCodePath} -type d -exec chmod 755 {} +
     chmod -R g+w ${pkpAppCodePath}/public
     chmod -R g+w ${pkpAppCodePath}/cache
 
