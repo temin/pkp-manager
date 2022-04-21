@@ -17,7 +17,7 @@
 # mysqlGeslo="geslo"
 
 
-function checkIfRoot {
+function checkIf_root {
 
     # Checks if script is run as root and exits if not
     if [ $EUID -ne 0 ]; then
@@ -63,12 +63,23 @@ function checkIfSourceSet {
 
     }
 
+function checkIf_syncDatabaseVersion {
 
-function checkAppCodeVersion {
+    # Checks if $checkIfDatabaseVersion variable is set and exit if not
+    if [[ -z ${syncDatabaseVersion} ]]; then
+        parseOutput warning "The variable \e[3mcheckIfDatabaseVersion\e[23m must have a value!"
+        parseOutput emphasis "\tOptions: full | trim"
+        exit 1
+    fi
+
+}
+
+
+function checkLocalInstanceAppCodeVersion {
 
     pkpAppVersion="$(cat ${pkpAppCodePath}/dbscripts/xml/version.xml | grep '<release>' | awk -F'[<>]' '{print $3}')"
 
-    }
+}
 
 
 function checkIfVersionSet {
@@ -162,7 +173,7 @@ function fixConfigurationFile {
     
     if [[ -z $pkpAppCodeVersion ]]; then
 
-        checkAppCodeVersion
+        checkLocalInstanceAppCodeVersion
 
     fi
 
@@ -202,10 +213,20 @@ function emptyDatabase {
     }
 
 function importDatabase {
-
+    
     # Import database backup
-    parseOutput emphasis "Importing database dump ${pkpAppDatabaseBackupFile}"
-    gunzip < $pkpAppDatabaseBackupFile | mysql $pkpAppDatabaseName 
+    parseOutput emphasis "Importing database dump ${pkpAppDatabaseBackupFile}."
+
+    if [[ ${syncDatabaseVersion} = 'trim' ]]; then
+
+        parseOutputwithout emphasis "Skipping data from metrics and submission_search_object_keywords tables."
+        gzip -cd $pkpAppDatabaseBackupFile | sed -r '/INSERT INTO `(submission_search_object_keywords|metrics)`/d' | mysql $pkpAppDatabaseName 
+
+    else
+
+        gunzip < $pkpAppDatabaseBackupFile | mysql $pkpAppDatabaseName 
+    
+    fi
 
     }
 
@@ -248,6 +269,8 @@ function fixDataFilePermissions {
 
 
 function extractVersionReleaseFiles {
+
+    parseOutput title "Fetching and/or extracting version ${pkpAppVersion} release files."
 
     # Check the number of numbers in the version number
     versionVariant="$(echo ${pkpAppVersion} | awk -F'.' '{print NF}')"
@@ -294,16 +317,35 @@ function extractVersionReleaseFiles {
 
 function prepareNewVersionCode {
 
+    parseOutput title "Preparing code files for version ${pkpAppVersion}."
+    
     extractVersionReleaseFiles
 
+    # Copy local instance files from older version
+    parseOutput emphasis "Copying local instance files."
     cp ${pkpAppCodePath}/config.inc.php ${pkpAppDownloads}/${pkpAppReleaseFileName%.tar.gz}/
     cp ${pkpAppCodePath}/.htaccess ${pkpAppDownloads}/${pkpAppReleaseFileName%.tar.gz}/
     cp -R ${pkpAppCodePath}/public ${pkpAppDownloads}/${pkpAppReleaseFileName%.tar.gz}/
 
+    # Copy custom plugin files / if prepared
+    # Manualy copy and extract plugins to ${pkpAppDownloads}/plugins-${pkpAppVersion}
     if [[ -d ${pkpAppDownloads}/plugins-${pkpAppVersion} ]]; then
-      rsync -a ${pkpAppDownloads}/plugins-${pkpAppVersion}/plugins ${pkpAppDownloads}/${pkpAppReleaseFileName%.tar.gz}/
+        parseOutput emphasis "Copying custom plugins."
+      rsync -a ${pkpAppDownloads}/plugins-${pkpAppVersion}/ ${pkpAppDownloads}/${pkpAppReleaseFileName%.tar.gz}
+    else 
+        parseOutput emphasis "No plugins prepared for this version."
     fi
     
+    # Copy local locale files
+    if [[ -d ${pkpAppStorage}/language-packs/sl_SI-${pkpAppVersion} ]]; then
+      parseOutput emphasis "Copying local locale files."
+      cp -R ${pkpAppStorage}/language-packs/sl_SI-${pkpAppVersion}/* ${pkpAppDownloads}/${pkpAppReleaseFileName%.tar.gz}
+    else 
+        parseOutput emphasis "No local locale files prepared for this version."
+    fi
+    
+    # Move files to web root
+    parseOutput emphasis "Moving files to web root directory."
     if [[ -d ${pkpAppCodePath}.old ]]; then
       rm -R ${pkpAppCodePath}.old
     fi
@@ -311,7 +353,7 @@ function prepareNewVersionCode {
     mv ${pkpAppDownloads}/${pkpAppReleaseFileName%.tar.gz} ${pkpAppCodePath}
     chmod -R 777 ${pkpAppCodePath}
 
-    }
+}
 
 function getLatestVersionNumber {
 
@@ -333,8 +375,8 @@ function upgradePkpApp {
 function checkPkpVersionPackage {
 
     # Check if all needed variables are set
-    checkIfSourceSet
-    checkIfVersionSet
+#     checkIfSourceSet
+#     checkIfVersionSet
     
     extractVersionReleaseFiles
     
@@ -478,6 +520,10 @@ function parseOutput() {
 # 4     underline
 
 reset=$'\e[0m'
+noitalic=$'\e[23m'
+normalitensity=$'\e[22m'
+nounderline=$'\e[24m'
+
 bold=$'\e[1m'
 faint=$'\e[2m'
 italic=$'\e[3m'
@@ -504,6 +550,10 @@ white=$'\e[0;37m'
 
     title)
       echo -e "\n${red}${bold}${underline}${2}${reset}\n"
+    ;;
+
+    warning)
+      echo -e "\n${purple}${bold}${2}${reset}\n"
     ;;
 
     emphasis)

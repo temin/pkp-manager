@@ -3,7 +3,7 @@
 # Get the Functions Library
 source lib_pkp-manager.inc.sh
 
-while getopts ":a:v:l:s" opt; do
+while getopts ":a:v:l:sd:" opt; do
 
     case $opt in
 
@@ -14,7 +14,7 @@ while getopts ":a:v:l:s" opt; do
         v)  # --version / PKP application version
             # If option is 'local' check locally installed PKP application
             if [[ $OPTARG = 'local' ]]; then
-#                 checkAppCodeVersion
+#                 checkLocalInstanceAppCodeVersion
 #                 pkpAppVersion="${pkpAppCodeVersion}"
                 pkpSource="zzff"
             elif [[ $OPTARG = 'latest' ]]; then
@@ -29,11 +29,20 @@ while getopts ":a:v:l:s" opt; do
         l)  # --locale / PKP application locale
             pkpLocale="$OPTARG"
             ;;
-        
+
 #         s)  # --sync / Sync local backup files with backup server
 #             checkIfSSHKey
 #             syncBackupFiles
 #             ;;
+
+        d)  # --database / Use full or trimmed database
+            if [[ $OPTARG =~ ^(full|trim)$ ]]; then
+                syncDatabaseVersion="$OPTARG"
+            else
+                parseOutput warning "\t'$OPTARG' is not an valid argument"
+                exit 1
+            fi
+            ;;
 
         \?)
             echo "Invalid option: -$OPTARG" >&2
@@ -59,15 +68,15 @@ case "$subcommand" in
 
     sync-backup)
         # Rsync files from backup server
-        checkIfRoot "${subcommand}"
+        checkIf_root "${subcommand}"
         checkIfSSHKey
         syncBackupFiles
 #         pkpConvertDatabase
     ;;
 
     sync-local-app)
-        checkIfRoot "${subcommand}"
-#         checkIfSSHKey
+        checkIf_root "${subcommand}"
+        checkIf_syncDatabaseVersion
         syncAppCode
         fixConfigurationFile
         emptyDatabase
@@ -77,7 +86,7 @@ case "$subcommand" in
     ;;
 
     upgrade)
-        checkIfRoot "${subcommand}"
+        checkIf_root "${subcommand}"
         checkIfVersionSet
         prepareNewVersionCode
         upgradePkpApp
@@ -86,35 +95,62 @@ case "$subcommand" in
     ;;
 
     compare-files)
-        
+
         # Check the installed PKP app version
         # Returns $pkpAppVersion
-        checkAppCodeVersion
+        checkLocalInstanceAppCodeVersion
 
         # Checks if $pkpAppVersion release files are present / error
         checkPkpVersionPackage
 
         # Find all directories in existing local OMP installation
         parseOutput title "Searching directories for $pkpApp in ${pkpAppCodePath}"
+        parseOutput emphasis "List of directories that were not fouund in original release package:"
+        
+        declare -A customPlugins
+        declare -A knownCustomPlugins=( ['addThis']="https://github.com/pkp/addThis/releases"
+                                        ['piwik']="https://github.com/pkp/piwik/releases"
+                                        ['customHeader']="https://github.com/pkp/customHeader/releases"
+                                        ['translator']="https://github.com/pkp/translator/releases"        
+        )
+        
+#         knownCustomPlugins['addThis']="https://github.com/pkp/addThis/releases"
+        
         while read existingDir; do
 
             findDir="$(echo "$existingDir" | sed "s|${pkpAppCodePath}/||g")"
 
             # Skip if directory root is 'public' or 'cache' / folders where OMP saves data
-            if [[ $findDir =~ ^(public/|cache/)+ ]]; then
+            # or if directory is 'locale' or '.git'
+            if [[ $findDir =~ ^(public/|cache/)+ || $findDir =~ (/locale/|\.git)+ ]]; then
                 continue
             fi
 
             # Check if directories exist in freshly extracted package of the same version
+            # If directory does not exist 
             if [[ ! -d ${pkpAppDownloads}/${pkpApp}-${pkpAppVersion%.*}-${pkpAppVersion##*.}/$findDir ]]; then
+
                 echo $findDir
+                
+#                 # To-Do: writen initialy for ojs only
+#                 if [[ $pkpApp == 'ojs' ]]; then
+#             
+#                     
+#                     if [[  ]]; then
+#                         
+#                     fi
+#                     
+#                 fi
+
             fi
 
-        done <<<"$(find ${pkpAppCodePath} -type d)"
+        done <<<"$(find ${pkpAppCodePath} -mindepth 1 -type d)"
+        
 
     ;;
 
     test)
+        checkIf_syncDatabaseVersion
         echo "OK!"
     ;;
     

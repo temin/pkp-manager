@@ -26,10 +26,12 @@ case "$1" in
         #####
         # Directories and files checks #
                                 #####
-
+        a=0
         for d in ${checkDirectories[@]}; do
+            a=$((a+1))
             if [[ ! -d $d ]]; then
                 echo -e "\n Folder \e[3m\e[1m$d\e[0m is missing! \n"
+                echo $a
                 exit 1
             fi
         done
