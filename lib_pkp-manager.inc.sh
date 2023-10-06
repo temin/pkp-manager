@@ -16,6 +16,10 @@
 # mysqlUporabnik="omp"
 # mysqlGeslo="geslo"
 
+# Local configuration post-processing array
+# Setting variables that require script options and local configuration to be pre-processed
+declare -A configPostProcessing 
+
 
 function checkIf_root {
 
@@ -73,7 +77,6 @@ function checkIf_syncDatabaseVersion {
     fi
 
 }
-
 
 function getLocalInstanceAppCodeVersion {
 
@@ -245,9 +248,9 @@ function fixCodeFilePermissions {
     parseOutput emphasis "Setting PKP application code file permissions / ${pkpAppCodePath}"
 
     # Fix PKP application code ownership and permissions
-    chown -R mitja:www-data ${pkpAppCodePath}
-    chmod 644 ${pkpAppCodePath}
-    find ${pkpAppCodePath} -type d -exec chmod 755 {} +
+    chown -R administrator:www-data ${pkpAppCodePath}
+    chmod 640 ${pkpAppCodePath}
+    find ${pkpAppCodePath} -type d -exec chmod 750 {} +
     chmod -R g+w ${pkpAppCodePath}/public
     chmod -R g+w ${pkpAppCodePath}/cache
 
@@ -261,7 +264,7 @@ function fixDataFilePermissions {
 
     # Fix PKP application data ownership and permissions
     parseOutput emphasis  "Setting PKP application data file permissions / $pkpAppDataPath"
-    chown -R www-data:mitja $pkpAppDataPath
+    chown -R ${pkpAppPhpPoolUser}:www-data $pkpAppDataPath
     chmod 640 $pkpAppDataPath
     find $pkpAppDataPath -type d -exec chmod 750 {} +
 
@@ -302,6 +305,7 @@ function extractVersionReleaseFiles {
 
     fi
 
+    # Delete release folder if exists
     if [[ -d ${pkpAppDownloads}/${pkpAppReleaseFileName%.tar.gz} ]]; then
 
         rm -R ${pkpAppDownloads}/${pkpAppReleaseFileName%.tar.gz}
@@ -313,7 +317,6 @@ function extractVersionReleaseFiles {
     tar -xzf ${pkpAppDownloads}/${pkpAppReleaseFileName}
 
     }
-    
 
 function prepareNewVersionCode {
 
@@ -335,7 +338,7 @@ function prepareNewVersionCode {
     else 
         parseOutput emphasis "No plugins prepared for this version."
     fi
-    
+
     # Copy local locale files
     if [[ -d ${pkpAppStorage}/language-packs/sl_SI-${pkpAppVersion} ]]; then
       parseOutput emphasis "Copying local locale files."
@@ -358,7 +361,7 @@ function prepareNewVersionCode {
 function getLatestVersionNumber {
 
   # Use the OJS/OMP upgrade script to check for latest available version
-  echo "$(php www/ojs/tools/upgrade.php check | grep 'Latest version' | awk -F':' '{print $2}' | awk '{$1=$1;print}')"
+  echo "$(php ${pkpAppCodePath}/tools/upgrade.php check | grep 'Latest version' | awk -F':' '{print $2}' | awk '{$1=$1;print}')"
 
 }
 
@@ -367,7 +370,7 @@ function upgradePkpApp {
     # Upgrade PKP application
     cd ${pkpAppCodePath}
     sed 's/installed = On/installed = Off/' -i config.inc.php
-    sudo -u www-data php tools/upgrade.php upgrade
+    sudo -u ${pkpAppPhpPoolUser} php tools/upgrade.php upgrade
     sed 's/installed = Off/installed = On/' -i config.inc.php
 
     }
@@ -377,12 +380,10 @@ function checkPkpVersionPackage {
     # Check if all needed variables are set
     checkIfSourceSet
     checkIfVersionSet
-    
+
     extractVersionReleaseFiles
-    
+
 }
-
-
 
 function convertsecs() {
   ((h=${1}/3600))

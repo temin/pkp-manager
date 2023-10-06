@@ -18,7 +18,8 @@ while getopts ":a:v:l:sd:" opt; do
 #                 pkpAppVersion="${pkpAppCodeVersion}"
                 pkpSource="zzff"
             elif [[ $OPTARG = 'latest' ]]; then
-                pkpAppVersion="$(getLatestVersionNumber)"
+                configPostProcessing["pkpAppVersion"]="latest"
+                #pkpAppVersion="$(getLatestVersionNumber)"
                 pkpSource="release"                
             else
                 pkpAppVersion="$OPTARG"
@@ -98,9 +99,11 @@ case "$subcommand" in
 
         # Check the installed PKP app version
         # Returns $pkpAppVersion
-        checkLocalInstanceAppCodeVersion
 
-        # Checks if $pkpAppVersion release files are present / error
+        getLocalInstanceAppCodeVersion
+#         checkLocalInstanceAppCodeVersion
+
+        # Checks/Prepares $pkpAppVersion release files
         checkPkpVersionPackage
 
         # Find all directories in existing local OMP installation
@@ -155,7 +158,6 @@ case "$subcommand" in
             fi
 
         done <<<"$(find ${pkpAppCodePath} -type f -name 'version.xml')"
-        
 
     ;;
 
@@ -163,12 +165,12 @@ case "$subcommand" in
         checkIf_syncDatabaseVersion
         echo "OK!"
     ;;
-    
+
     *)
         echo "The subcommand is missing!"
         exit 1
     ;;
-  
+
 ##
 ##  Options below are not yet ported or tested with pkp-manager scripts
 ##
