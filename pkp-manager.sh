@@ -17,8 +17,8 @@ while getopts ":a:v:l:s" opt; do
 #                 checkAppCodeVersion
 #                 pkpAppVersion="${pkpAppCodeVersion}"
                 pkpSource="zzff"
-            elif [[ $OPTARG = 'latest' ]]; then
-                pkpAppVersion="$(getLatestVersionNumber)"
+            elif [[ $OPTARG == 'latest' ]]; then
+                configPostProcessing["pkpAppVersion"]="latest"
                 pkpSource="release"                
             else
                 pkpAppVersion="$OPTARG"
@@ -89,40 +89,78 @@ case "$subcommand" in
         
         # Check the installed PKP app version
         # Returns $pkpAppVersion
-        checkAppCodeVersion
+        getLocalInstanceAppCodeVersion
 
-        # Checks if $pkpAppVersion release files are present / error
+        # Checks/Prepares $pkpAppVersion release files
         checkPkpVersionPackage
 
         # Find all directories in existing local OMP installation
-        parseOutput title "Searching directories for $pkpApp in ${pkpAppCodePath}"
-        while read existingDir; do
+        parseOutput title "Searching plugins for $pkpApp in ${pkpAppCodePath}"
+        parseOutput emphasis "List of plugins that were not found in original release package:"
+        
+        # To-Do:
+        #   PKP Plubins List: http://pkp.sfu.ca/ojs/xml/plugins.xml
+        #   bash: xmllint
+        #   
+        declare -A customPlugins
+        declare -A knownCustomPlugins=( ['addThis']="https://github.com/pkp/addThis/releases"
+                                        ['piwik']="https://github.com/pkp/piwik/releases"
+                                        ['customHeader']="https://github.com/pkp/customHeader/releases"
+                                        ['translator']="https://github.com/pkp/translator/releases"
+                                        ['citations']='https://github.com/RBoelter/citations/releases'
+#                                         ['']=''
+#                                         ['']=''
+#                                         ['']=''
+#                                         ['']=''
+        )
 
-            findDir="$(echo "$existingDir" | sed "s|${pkpAppCodePath}/||g")"
+        
+#         knownCustomPlugins['addThis']="https://github.com/pkp/addThis/releases"
+        
+        while read versionFile; do
 
-            # Skip if directory root is 'public' or 'cache' / folders where OMP saves data
-            if [[ $findDir =~ ^(public/|cache/)+ ]]; then
+            pluginVersionFile="$(echo "$versionFile" | sed "s|${pkpAppCodePath}/||g")"
+            
+            # Skip if pluginVersionFile is 'pluginVersionFile'
+            if [[ $pluginVersionFile = 'dbscripts/xml/version.xml' ]]; then
                 continue
             fi
+#             echo $pluginVersionFile
 
-            # Check if directories exist in freshly extracted package of the same version
-            if [[ ! -d ${pkpAppDownloads}/${pkpApp}-${pkpAppVersion%.*}-${pkpAppVersion##*.}/$findDir ]]; then
-                echo $findDir
+            # Check if pluginVersionFile exist in freshly extracted package of the same version
+            # If directory does not exist print pluginVersionFile
+            if [[ ! -f ${pkpAppDownloads}/${pkpApp}-${pkpAppVersion%.*}-${pkpAppVersion##*.}/${pluginVersionFile} ]]; then
+
+                echo $pluginVersionFile
+                
+#                 # To-Do: writen initialy for ojs only
+#                 if [[ $pkpApp == 'ojs' ]]; then
+#             
+#                     
+#                     if [[  ]]; then
+#                         
+#                     fi
+#                     
+#                 fi
+
             fi
 
-        done <<<"$(find ${pkpAppCodePath} -type d)"
+        done <<<"$(find ${pkpAppCodePath} -type f -name 'version.xml')"
+
 
     ;;
 
     test)
-        echo "OK!"
+#         getLatestVersionNumber
+        
+        echo $pkpAppVersion
     ;;
-    
+
     *)
         echo "The subcommand is missing!"
         exit 1
     ;;
-  
+
 ##
 ##  Options below are not yet ported or tested with pkp-manager scripts
 ##

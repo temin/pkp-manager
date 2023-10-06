@@ -16,8 +16,13 @@
 # mysqlUporabnik="omp"
 # mysqlGeslo="geslo"
 
+# Local configuration post-processing array
+# Setting variables that require script options and local configuration to be pre-processed
+declare -A configPostProcessing 
+
 
 function checkIfRoot {
+#to-Do: maybe change function name to checkIf_root
 
     # Checks if script is run as root and exits if not
     if [ $EUID -ne 0 ]; then
@@ -63,8 +68,18 @@ function checkIfSourceSet {
 
     }
 
+function checkIf_syncDatabaseVersion {
 
-function checkAppCodeVersion {
+    # Checks if $checkIfDatabaseVersion variable is set and exit if not
+    if [[ -z ${syncDatabaseVersion} ]]; then
+        parseOutput warning "The variable \e[3mcheckIfDatabaseVersion\e[23m must have a value!"
+        parseOutput emphasis "\tOptions: full | trim"
+        exit 1
+    fi
+
+}
+
+function getLocalInstanceAppCodeVersion {
 
     pkpAppVersion="$(cat ${pkpAppCodePath}/dbscripts/xml/version.xml | grep '<release>' | awk -F'[<>]' '{print $3}')"
 
@@ -162,7 +177,7 @@ function fixConfigurationFile {
     
     if [[ -z $pkpAppCodeVersion ]]; then
 
-        checkAppCodeVersion
+        getLocalInstanceAppCodeVersion
 
     fi
 
@@ -202,10 +217,20 @@ function emptyDatabase {
     }
 
 function importDatabase {
-
+    
     # Import database backup
-    parseOutput emphasis "Importing database dump ${pkpAppDatabaseBackupFile}"
-    gunzip < $pkpAppDatabaseBackupFile | mysql $pkpAppDatabaseName 
+    parseOutput emphasis "Importing database dump ${pkpAppDatabaseBackupFile}."
+
+    if [[ ${syncDatabaseVersion} = 'trim' ]]; then
+
+        parseOutput emphasis "Skipping data from metrics and submission_search_object_keywords tables."
+        gzip -cd $pkpAppDatabaseBackupFile | sed -r '/INSERT INTO `(submission_search_object_keywords|metrics)`/d' | mysql $pkpAppDatabaseName 
+
+    else
+
+        gunzip < $pkpAppDatabaseBackupFile | mysql $pkpAppDatabaseName 
+    
+    fi
 
     }
 
@@ -224,9 +249,9 @@ function fixCodeFilePermissions {
     parseOutput emphasis "Setting PKP application code file permissions / ${pkpAppCodePath}"
 
     # Fix PKP application code ownership and permissions
-    chown -R mitja:www-data ${pkpAppCodePath}
-    chmod 644 ${pkpAppCodePath}
-    find ${pkpAppCodePath} -type d -exec chmod 755 {} +
+    chown -R administrator:www-data ${pkpAppCodePath}
+    chmod 640 ${pkpAppCodePath}
+    find ${pkpAppCodePath} -type d -exec chmod 750 {} +
     chmod -R g+w ${pkpAppCodePath}/public
     chmod -R g+w ${pkpAppCodePath}/cache
 
@@ -240,7 +265,7 @@ function fixDataFilePermissions {
 
     # Fix PKP application data ownership and permissions
     parseOutput emphasis  "Setting PKP application data file permissions / $pkpAppDataPath"
-    chown -R www-data:mitja $pkpAppDataPath
+    chown -R ${pkpAppPhpPoolUser}:www-data $pkpAppDataPath
     chmod 640 $pkpAppDataPath
     find $pkpAppDataPath -type d -exec chmod 750 {} +
 
@@ -279,6 +304,7 @@ function extractVersionReleaseFiles {
 
     fi
 
+    # Delete release folder if exists
     if [[ -d ${pkpAppDownloads}/${pkpAppReleaseFileName%.tar.gz} ]]; then
 
         rm -R ${pkpAppDownloads}/${pkpAppReleaseFileName%.tar.gz}
@@ -290,7 +316,6 @@ function extractVersionReleaseFiles {
     tar -xzf ${pkpAppDownloads}/${pkpAppReleaseFileName}
 
     }
-    
 
 function prepareNewVersionCode {
 
@@ -316,7 +341,7 @@ function prepareNewVersionCode {
 function getLatestVersionNumber {
 
   # Use the OJS/OMP upgrade script to check for latest available version
-  echo "$(php www/ojs/tools/upgrade.php check | grep 'Latest version' | awk -F':' '{print $2}' | awk '{$1=$1;print}')"
+  echo "$(php ${pkpAppCodePath}/tools/upgrade.php check | grep 'Latest version' | awk -F':' '{print $2}' | awk '{$1=$1;print}')"
 
 }
 
@@ -325,7 +350,7 @@ function upgradePkpApp {
     # Upgrade PKP application
     cd ${pkpAppCodePath}
     sed 's/installed = On/installed = Off/' -i config.inc.php
-    sudo -u www-data php tools/upgrade.php upgrade
+    sudo -u ${pkpAppPhpPoolUser} php tools/upgrade.php upgrade
     sed 's/installed = Off/installed = On/' -i config.inc.php
 
     }
@@ -335,11 +360,10 @@ function checkPkpVersionPackage {
     # Check if all needed variables are set
     checkIfSourceSet
     checkIfVersionSet
-    
-    extractVersionReleaseFiles
-    
-}
 
+    extractVersionReleaseFiles
+
+}
 
 
 function convertsecs() {

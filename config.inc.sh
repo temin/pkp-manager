@@ -24,3 +24,16 @@ pkpAppDatabaseBackupFile="$(find ${pkpBackupRootPath}/backups/ -type f -name "${
 
 # Run checks and tests on configured files and directories variables
 source lib_tests.inc.sh "config_check-dir-file"
+
+# Configuration post-processing
+for key in ${!configPostProcessing[@]}; do
+    
+    value="${configPostProcessing["${key}"]}"
+    
+    if [[ ${key} == 'pkpAppVersion'  &&  ${value} == 'latest' ]]; then
+
+        pkpAppVersion=$(getLatestVersionNumber)
+        
+    fi
+
+done
