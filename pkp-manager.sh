@@ -3,7 +3,7 @@
 # Get the Functions Library
 source lib_pkp-manager.inc.sh
 
-while getopts ":a:v:l:s" opt; do
+while getopts ":a:v:l:sd:" opt; do
 
     case $opt in
 
@@ -14,11 +14,12 @@ while getopts ":a:v:l:s" opt; do
         v)  # --version / PKP application version
             # If option is 'local' check locally installed PKP application
             if [[ $OPTARG = 'local' ]]; then
-#                 checkAppCodeVersion
+#                 checkLocalInstanceAppCodeVersion
 #                 pkpAppVersion="${pkpAppCodeVersion}"
                 pkpSource="zzff"
-            elif [[ $OPTARG == 'latest' ]]; then
+            elif [[ $OPTARG = 'latest' ]]; then
                 configPostProcessing["pkpAppVersion"]="latest"
+                #pkpAppVersion="$(getLatestVersionNumber)"
                 pkpSource="release"                
             else
                 pkpAppVersion="$OPTARG"
@@ -29,11 +30,20 @@ while getopts ":a:v:l:s" opt; do
         l)  # --locale / PKP application locale
             pkpLocale="$OPTARG"
             ;;
-        
+
 #         s)  # --sync / Sync local backup files with backup server
 #             checkIfSSHKey
 #             syncBackupFiles
 #             ;;
+
+        d)  # --database / Use full or trimmed database
+            if [[ $OPTARG =~ ^(full|trim)$ ]]; then
+                syncDatabaseVersion="$OPTARG"
+            else
+                parseOutput warning "\t'$OPTARG' is not an valid argument"
+                exit 1
+            fi
+            ;;
 
         \?)
             echo "Invalid option: -$OPTARG" >&2
@@ -59,15 +69,15 @@ case "$subcommand" in
 
     sync-backup)
         # Rsync files from backup server
-        checkIfRoot "${subcommand}"
+        checkIf_root "${subcommand}"
         checkIfSSHKey
         syncBackupFiles
 #         pkpConvertDatabase
     ;;
 
     sync-local-app)
-        checkIfRoot "${subcommand}"
-#         checkIfSSHKey
+        checkIf_root "${subcommand}"
+        checkIf_syncDatabaseVersion
         syncAppCode
         fixConfigurationFile
         emptyDatabase
@@ -77,7 +87,7 @@ case "$subcommand" in
     ;;
 
     upgrade)
-        checkIfRoot "${subcommand}"
+        checkIf_root "${subcommand}"
         checkIfVersionSet
         prepareNewVersionCode
         upgradePkpApp
@@ -86,10 +96,12 @@ case "$subcommand" in
     ;;
 
     compare-files)
-        
+
         # Check the installed PKP app version
         # Returns $pkpAppVersion
+
         getLocalInstanceAppCodeVersion
+#         checkLocalInstanceAppCodeVersion
 
         # Checks/Prepares $pkpAppVersion release files
         checkPkpVersionPackage
@@ -147,13 +159,11 @@ case "$subcommand" in
 
         done <<<"$(find ${pkpAppCodePath} -type f -name 'version.xml')"
 
-
     ;;
 
     test)
-#         getLatestVersionNumber
-        
-        echo $pkpAppVersion
+        checkIf_syncDatabaseVersion
+        echo "OK!"
     ;;
 
     *)
