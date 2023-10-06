@@ -104,33 +104,43 @@ case "$subcommand" in
         checkPkpVersionPackage
 
         # Find all directories in existing local OMP installation
-        parseOutput title "Searching directories for $pkpApp in ${pkpAppCodePath}"
-        parseOutput emphasis "List of directories that were not fouund in original release package:"
+        parseOutput title "Searching plugins for $pkpApp in ${pkpAppCodePath}"
+        parseOutput emphasis "List of plugins that were not found in original release package:"
         
+        # To-Do:
+        #   PKP Plubins List: http://pkp.sfu.ca/ojs/xml/plugins.xml
+        #   bash: xmllint
+        #   
         declare -A customPlugins
         declare -A knownCustomPlugins=( ['addThis']="https://github.com/pkp/addThis/releases"
                                         ['piwik']="https://github.com/pkp/piwik/releases"
                                         ['customHeader']="https://github.com/pkp/customHeader/releases"
-                                        ['translator']="https://github.com/pkp/translator/releases"        
+                                        ['translator']="https://github.com/pkp/translator/releases"
+                                        ['citations']='https://github.com/RBoelter/citations/releases'
+#                                         ['']=''
+#                                         ['']=''
+#                                         ['']=''
+#                                         ['']=''
         )
+
         
 #         knownCustomPlugins['addThis']="https://github.com/pkp/addThis/releases"
         
-        while read existingDir; do
+        while read versionFile; do
 
-            findDir="$(echo "$existingDir" | sed "s|${pkpAppCodePath}/||g")"
-
-            # Skip if directory root is 'public' or 'cache' / folders where OMP saves data
-            # or if directory is 'locale' or '.git'
-            if [[ $findDir =~ ^(public/|cache/)+ || $findDir =~ (/locale/|\.git)+ ]]; then
+            pluginVersionFile="$(echo "$versionFile" | sed "s|${pkpAppCodePath}/||g")"
+            
+            # Skip if pluginVersionFile is 'pluginVersionFile'
+            if [[ $pluginVersionFile = 'dbscripts/xml/version.xml' ]]; then
                 continue
             fi
+#             echo $pluginVersionFile
 
-            # Check if directories exist in freshly extracted package of the same version
-            # If directory does not exist 
-            if [[ ! -d ${pkpAppDownloads}/${pkpApp}-${pkpAppVersion%.*}-${pkpAppVersion##*.}/$findDir ]]; then
+            # Check if pluginVersionFile exist in freshly extracted package of the same version
+            # If directory does not exist print pluginVersionFile
+            if [[ ! -f ${pkpAppDownloads}/${pkpApp}-${pkpAppVersion%.*}-${pkpAppVersion##*.}/${pluginVersionFile} ]]; then
 
-                echo $findDir
+                echo $pluginVersionFile
                 
 #                 # To-Do: writen initialy for ojs only
 #                 if [[ $pkpApp == 'ojs' ]]; then
@@ -144,7 +154,7 @@ case "$subcommand" in
 
             fi
 
-        done <<<"$(find ${pkpAppCodePath} -mindepth 1 -type d)"
+        done <<<"$(find ${pkpAppCodePath} -type f -name 'version.xml')"
         
 
     ;;

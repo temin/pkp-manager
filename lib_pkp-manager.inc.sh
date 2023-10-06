@@ -75,7 +75,7 @@ function checkIf_syncDatabaseVersion {
 }
 
 
-function checkLocalInstanceAppCodeVersion {
+function getLocalInstanceAppCodeVersion {
 
     pkpAppVersion="$(cat ${pkpAppCodePath}/dbscripts/xml/version.xml | grep '<release>' | awk -F'[<>]' '{print $3}')"
 
@@ -173,7 +173,7 @@ function fixConfigurationFile {
     
     if [[ -z $pkpAppCodeVersion ]]; then
 
-        checkLocalInstanceAppCodeVersion
+        getLocalInstanceAppCodeVersion
 
     fi
 
@@ -219,7 +219,7 @@ function importDatabase {
 
     if [[ ${syncDatabaseVersion} = 'trim' ]]; then
 
-        parseOutputwithout emphasis "Skipping data from metrics and submission_search_object_keywords tables."
+        parseOutput emphasis "Skipping data from metrics and submission_search_object_keywords tables."
         gzip -cd $pkpAppDatabaseBackupFile | sed -r '/INSERT INTO `(submission_search_object_keywords|metrics)`/d' | mysql $pkpAppDatabaseName 
 
     else
@@ -375,8 +375,8 @@ function upgradePkpApp {
 function checkPkpVersionPackage {
 
     # Check if all needed variables are set
-#     checkIfSourceSet
-#     checkIfVersionSet
+    checkIfSourceSet
+    checkIfVersionSet
     
     extractVersionReleaseFiles
     
