@@ -3,7 +3,7 @@
 # Get the Functions Library
 source lib_pkp-manager.inc.sh
 
-while getopts ":a:v:l:sd:" opt; do
+while getopts ":a:v:u:l:sd:" opt; do
 
     case $opt in
 
@@ -14,7 +14,6 @@ while getopts ":a:v:l:sd:" opt; do
         v)  # --version / PKP application version
             # If option is 'local' check locally installed PKP application
             if [[ $OPTARG = 'local' ]]; then
-#                 checkLocalInstanceAppCodeVersion
 #                 pkpAppVersion="${pkpAppCodeVersion}"
                 pkpSource="zzff"
             elif [[ $OPTARG = 'latest' ]]; then
@@ -27,6 +26,11 @@ while getopts ":a:v:l:sd:" opt; do
             fi
             ;;
         
+        u)  # --upgrade-version / PKP application version to upgrade to
+            # i.e. 3.4.0-3
+            pkpAppUpgradeVersion="${OPTARG}"
+        
+        ;;
         l)  # --locale / PKP application locale
             pkpLocale="$OPTARG"
             ;;
@@ -39,8 +43,10 @@ while getopts ":a:v:l:sd:" opt; do
         d)  # --database / Use full or trimmed database
             if [[ $OPTARG =~ ^(full|trim)$ ]]; then
                 syncDatabaseVersion="$OPTARG"
+            elif [[ $OPTARG =~ ^20[0-9]{6}-[0-9]$ ]]; then 
+                databaseBackupDate="$OPTARG"
             else
-                parseOutput warning "\t'$OPTARG' is not an valid argument"
+                parseOutput warning "\t'$OPTARG' is not an valid value for option '-d'"
                 exit 1
             fi
             ;;
@@ -69,14 +75,25 @@ case "$subcommand" in
 
     sync-backup)
         # Rsync files from backup server
-        checkIf_root "${subcommand}"
+        checkIfRoot "${subcommand}"
         checkIfSSHKey
         syncBackupFiles
 #         pkpConvertDatabase
     ;;
 
+    sync-database)
+    
+        checkIfRoot "${subcommand}"
+        emptyDatabase
+        importDatabase
+        copyConfigurationFile
+        fixCodeFilePermissions
+        fixDataFilePermissions
+    
+    ;;
+
     sync-local-app)
-        checkIf_root "${subcommand}"
+        checkIfRoot "${subcommand}"
         checkIf_syncDatabaseVersion
         syncAppCode
         fixConfigurationFile
@@ -86,84 +103,23 @@ case "$subcommand" in
         fixDataFilePermissions
     ;;
 
-    upgrade)
-        checkIf_root "${subcommand}"
+    prepare-upgrade)
+        checkIfRoot "${subcommand}"
         checkIfVersionSet
-        prepareNewVersionCode
+        prepareNewVersionCode "${pkpAppVersion}"
+    ;;
+
+    upgrade)
+        checkIfRoot "${subcommand}"
+        checkIfVersionSet
         upgradePkpApp
         fixCodeFilePermissions
         fixDataFilePermissions
     ;;
 
-    compare-files)
-
-        # Check the installed PKP app version
-        # Returns $pkpAppVersion
-
-        getLocalInstanceAppCodeVersion
-#         checkLocalInstanceAppCodeVersion
-
-        # Checks/Prepares $pkpAppVersion release files
-        checkPkpVersionPackage
-
-        # Find all directories in existing local OMP installation
-        parseOutput title "Searching plugins for $pkpApp in ${pkpAppCodePath}"
-        parseOutput emphasis "List of plugins that were not found in original release package:"
-        
-        # To-Do:
-        #   PKP Plubins List: http://pkp.sfu.ca/ojs/xml/plugins.xml
-        #   bash: xmllint
-        #   
-        declare -A customPlugins
-        declare -A knownCustomPlugins=( ['addThis']="https://github.com/pkp/addThis/releases"
-                                        ['piwik']="https://github.com/pkp/piwik/releases"
-                                        ['customHeader']="https://github.com/pkp/customHeader/releases"
-                                        ['translator']="https://github.com/pkp/translator/releases"
-                                        ['citations']='https://github.com/RBoelter/citations/releases'
-#                                         ['']=''
-#                                         ['']=''
-#                                         ['']=''
-#                                         ['']=''
-        )
-
-        
-#         knownCustomPlugins['addThis']="https://github.com/pkp/addThis/releases"
-        
-        while read versionFile; do
-
-            pluginVersionFile="$(echo "$versionFile" | sed "s|${pkpAppCodePath}/||g")"
-            
-            # Skip if pluginVersionFile is 'pluginVersionFile'
-            if [[ $pluginVersionFile = 'dbscripts/xml/version.xml' ]]; then
-                continue
-            fi
-#             echo $pluginVersionFile
-
-            # Check if pluginVersionFile exist in freshly extracted package of the same version
-            # If directory does not exist print pluginVersionFile
-            if [[ ! -f ${pkpAppDownloads}/${pkpApp}-${pkpAppVersion%.*}-${pkpAppVersion##*.}/${pluginVersionFile} ]]; then
-
-                echo $pluginVersionFile
-                
-#                 # To-Do: writen initialy for ojs only
-#                 if [[ $pkpApp == 'ojs' ]]; then
-#             
-#                     
-#                     if [[  ]]; then
-#                         
-#                     fi
-#                     
-#                 fi
-
-            fi
-
-        done <<<"$(find ${pkpAppCodePath} -type f -name 'version.xml')"
-
-    ;;
-
     test)
-        checkIf_syncDatabaseVersion
-        echo "OK!"
+        getLocalInstanceAppCodeVersion
+        copyConfigurationFile
     ;;
 
     *)

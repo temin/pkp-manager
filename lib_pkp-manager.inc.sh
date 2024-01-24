@@ -21,7 +21,7 @@
 declare -A configPostProcessing 
 
 
-function checkIf_root {
+function checkIfRoot {
 
     # Checks if script is run as root and exits if not
     if [ $EUID -ne 0 ]; then
@@ -61,28 +61,18 @@ function checkIfSourceSet {
 
     # Checks if $ompSource variable is set and exit if not
     if [[ -z $pkpSource ]]; then
-        echo -e "The variable \e[3mompSource\e[0m must have a value!"
+        echo -e "The variable \e[3mpkpSource\e[0m must have a value!"
         exit 1
     fi
 
     }
 
-function checkIf_syncDatabaseVersion {
-
-    # Checks if $checkIfDatabaseVersion variable is set and exit if not
-    if [[ -z ${syncDatabaseVersion} ]]; then
-        parseOutput warning "The variable \e[3mcheckIfDatabaseVersion\e[23m must have a value!"
-        parseOutput emphasis "\tOptions: full | trim"
-        exit 1
-    fi
-
-}
 
 function getLocalInstanceAppCodeVersion {
 
     pkpAppVersion="$(cat ${pkpAppCodePath}/dbscripts/xml/version.xml | grep '<release>' | awk -F'[<>]' '{print $3}')"
 
-}
+    }
 
 
 function checkIfVersionSet {
@@ -109,14 +99,14 @@ function syncBackupFiles {
 # Sync local app code
 function syncAppCode {
 
-    parseOutput title "Syncing ${pkpApp} files"
+    parseOutput title "Syncing ${pkpAppName}files"
     rsync -a --delete --info=progress2 ${pkpAppBackupRootPath}/${pkpApp}/ ${pkpAppCodePath}
 
     }
     
 function pkpConvertDatabase {
 
-    parseOutput title "Converting ${pkpApp} database to mydumper"
+    parseOutput title "Converting ${pkpAppName}database to mydumper"
     
     # Empty the temporary database (maybe drop & create)
     # mysql -e "DROP DATABASE IF EXISTS "
@@ -169,6 +159,14 @@ function pkpConvertDatabase {
 # 
 #     }
 
+function copyConfigurationFile {
+
+    # Get local instance version: i.e. 3.3.0.13
+    getLocalInstanceAppCodeVersion
+    
+    cp ${pkpConfigFilePath}/config.inc.php.${pkpAppVersion} ${pkpAppCodePath}/config.inc.php
+
+}
 
 function fixConfigurationFile {
 
@@ -208,7 +206,7 @@ function fixConfigurationFile {
 function emptyDatabase {
 
     parseOutput title "Handling database"
-    parseOutput emphasis "Deleting all tables from $pkpApp ($pkpAppDatabaseName) database."
+    parseOutput emphasis "Deleting all tables from $pkpAppName ($pkpAppDatabaseName) database."
     
     # Izbriši vse tabele - tudi tiste, ki so bile na novo ustvarjene med poskusi nadgradnje
     mysqldump -u $pkpAppDatabaseUser -p$pkpAppDatabasePassword --add-drop-table --no-data $pkpAppDatabaseName | grep -e '^DROP' | (echo "SET FOREIGN_KEY_CHECKS=0;"; cat; echo "SET FOREIGN_KEY_CHECKS=1;") | mysql -u $pkpAppDatabaseUser -p$pkpAppDatabasePassword $pkpAppDatabaseName
@@ -216,21 +214,16 @@ function emptyDatabase {
     }
 
 function importDatabase {
-    
-    # Import database backup
-    parseOutput emphasis "Importing database dump ${pkpAppDatabaseBackupFile}."
 
-    if [[ ${syncDatabaseVersion} = 'trim' ]]; then
-
-        parseOutput emphasis "Skipping data from metrics and submission_search_object_keywords tables."
-        gzip -cd $pkpAppDatabaseBackupFile | sed -r '/INSERT INTO `(submission_search_object_keywords|metrics)`/d' | mysql $pkpAppDatabaseName 
-
+    if [[ -n ${databaseBackupDate} ]]; then
+        parseOutput emphasis "Importing database dump ${pkpStorage}/${pkpApp}/ojs-UL-ojs-${databaseBackupDate}.sql.gz"
+        gunzip < "${pkpStorage}/${pkpApp}/ojs-UL-ojs-${databaseBackupDate}.sql.gz" | mysql -u $pkpAppDatabaseUser -p$pkpAppDatabasePassword $pkpAppDatabaseName 
     else
-
-        gunzip < $pkpAppDatabaseBackupFile | mysql $pkpAppDatabaseName 
-    
+        # Import database backup
+#         parseOutput emphasis "Importing database dump ${pkpAppDatabaseBackupFile}"
+#         gunzip < $pkpAppDatabaseBackupFile | mysql -u $pkpAppDatabaseUser -p$pkpAppDatabasePassword $pkpAppDatabaseName 
+        echo 'Nope'
     fi
-
     }
 
 function importDatabaseMyDumper {
@@ -271,30 +264,29 @@ function fixDataFilePermissions {
     }
 
 
-function extractVersionReleaseFiles {
+function extractVersionReleaseFiles() {
 
-    parseOutput title "Fetching and/or extracting version ${pkpAppVersion} release files."
-
+    local pkpAppVersion="${1}"
     # Check the number of numbers in the version number
     versionVariant="$(echo ${pkpAppVersion} | awk -F'.' '{print NF}')"
 
     if [[ ${versionVariant} == 4 ]]; then
 
-      pkpAppReleaseFileName="${pkpApp}-${pkpAppVersion%.*}-${pkpAppVersion##*.}.tar.gz"
+      pkpAppReleaseFileName="${pkpAppName}-${pkpAppVersion%.*}-${pkpAppVersion##*.}.tar.gz"
 
     elif [[ ${versionVariant} == 3 ]]; then
 
-      pkpAppReleaseFileName="${pkpApp}-${pkpAppVersion}.tar.gz"
+      pkpAppReleaseFileName="${pkpAppName}-${pkpAppVersion}.tar.gz"
 
     fi
 
     # Check if version release file exist / download it
     if [[ ! -f ${pkpAppDownloads}/$pkpAppReleaseFileName ]]; then
 
-        local downloadURL="https://pkp.sfu.ca/${pkpApp}/download/${pkpAppReleaseFileName}"
+        local downloadURL="https://pkp.sfu.ca/${pkpAppName}/download/${pkpAppReleaseFileName}"
         wget --directory-prefix=$pkpAppDownloads $downloadURL
     else
-        parseOutput emphasis "Release archive for $pkpApp version $pkpAppVersion is already downloaded."
+        parseOutput emphasis "Release archive for ${pkpAppName} version $pkpAppVersion is already downloaded."
     fi
 
     # Check if version release file was successfuly downloaded
@@ -312,43 +304,26 @@ function extractVersionReleaseFiles {
 
     fi
 
-    parseOutput emphasis "Extracting release archive for $pkpApp version $pkpAppVersion to ${pkpAppDownloads}"
-    cd ${pkpAppDownloads}/
-    tar -xzf ${pkpAppDownloads}/${pkpAppReleaseFileName}
+    parseOutput emphasis "Extracting release archive for ${pkpAppName} version $pkpAppVersion to ${pkpAppDownloads}"
+#     cd ${pkpAppDownloads}/
+#     pwd
+#     echo "${pkpAppDownloads}/${pkpAppReleaseFileName}"
+    tar -xzf ${pkpAppDownloads}/${pkpAppReleaseFileName} -C ${pkpAppDownloads}
 
     }
 
-function prepareNewVersionCode {
+function prepareNewVersionCode() {
 
-    parseOutput title "Preparing code files for version ${pkpAppVersion}."
-    
-    extractVersionReleaseFiles
+    extractVersionReleaseFiles "${1}"
 
-    # Copy local instance files from older version
-    parseOutput emphasis "Copying local instance files."
     cp ${pkpAppCodePath}/config.inc.php ${pkpAppDownloads}/${pkpAppReleaseFileName%.tar.gz}/
     cp ${pkpAppCodePath}/.htaccess ${pkpAppDownloads}/${pkpAppReleaseFileName%.tar.gz}/
     cp -R ${pkpAppCodePath}/public ${pkpAppDownloads}/${pkpAppReleaseFileName%.tar.gz}/
 
-    # Copy custom plugin files / if prepared
-    # Manualy copy and extract plugins to ${pkpAppDownloads}/plugins-${pkpAppVersion}
     if [[ -d ${pkpAppDownloads}/plugins-${pkpAppVersion} ]]; then
-        parseOutput emphasis "Copying custom plugins."
-      rsync -a ${pkpAppDownloads}/plugins-${pkpAppVersion}/ ${pkpAppDownloads}/${pkpAppReleaseFileName%.tar.gz}
-    else 
-        parseOutput emphasis "No plugins prepared for this version."
-    fi
-
-    # Copy local locale files
-    if [[ -d ${pkpAppStorage}/language-packs/sl_SI-${pkpAppVersion} ]]; then
-      parseOutput emphasis "Copying local locale files."
-      cp -R ${pkpAppStorage}/language-packs/sl_SI-${pkpAppVersion}/* ${pkpAppDownloads}/${pkpAppReleaseFileName%.tar.gz}
-    else 
-        parseOutput emphasis "No local locale files prepared for this version."
+      rsync -a ${pkpAppDownloads}/plugins-${pkpAppVersion}/plugins ${pkpAppDownloads}/${pkpAppReleaseFileName%.tar.gz}/
     fi
     
-    # Move files to web root
-    parseOutput emphasis "Moving files to web root directory."
     if [[ -d ${pkpAppCodePath}.old ]]; then
       rm -R ${pkpAppCodePath}.old
     fi
@@ -356,13 +331,102 @@ function prepareNewVersionCode {
     mv ${pkpAppDownloads}/${pkpAppReleaseFileName%.tar.gz} ${pkpAppCodePath}
     chmod -R 777 ${pkpAppCodePath}
 
-}
+    }
 
 function getLatestVersionNumber {
 
   # Use the OJS/OMP upgrade script to check for latest available version
   echo "$(php ${pkpAppCodePath}/tools/upgrade.php check | grep 'Latest version' | awk -F':' '{print $2}' | awk '{$1=$1;print}')"
 
+}
+
+function compareFiles {
+
+#     # Check the installed PKP app version
+#     # Returns $pkpAppVersion i.e. 3.3.0.13
+# 
+#     getLocalInstanceAppCodeVersion
+# 
+#     # Checks/Prepares $pkpAppVersion release files
+#     checkPkpVersionPackage "${pkpAppVersion}"
+
+    # Find all directories in existing local PKP app installation
+    parseOutput title "Searching plugins for $pkpApp in ${pkpAppCodePath}"
+    parseOutput emphasis "List of plugins that were not found in original release package:"
+    
+    # To-Do:
+    #   PKP Plugins List: http://pkp.sfu.ca/ojs/xml/plugins.xml
+    #   bash: xmllint
+    #   
+#         # Get plugin data from plugins.xml file
+#         
+#         # If: plugins.xml file exists and is no more than one day old
+#         ## Read cached API data
+#         if [[ -f ${pkpAppDownloads}/${pkpAppPluginsXml} ]] && [[ $(date -r ${pkpAppDownloads}/${pkpAppPluginsXml} +%s > $(date -d "now -1 day" +%s) ]]; then
+# 
+#             echo "Reading cached plugins data"
+#             
+# 
+#         # Else: 
+#         ## Download new plugins.xml file
+#         else
+#             echo "Downloading plugins.xml file"
+#             
+#         fi
+    
+    declare -A customPlugins
+    declare -A knownCustomPlugins=( ['addThis']="https://github.com/pkp/addThis/releases"
+                                    ['piwik']="https://github.com/pkp/piwik/releases"
+                                    ['customHeader']="https://github.com/pkp/customHeader/releases"
+                                    ['translator']="https://github.com/pkp/translator/releases"
+                                    ['citations']='https://github.com/RBoelter/citations/releases'
+                                    ['quickSubmit']='https://github.com/pkp/quickSubmit'
+                                    ['crossrefReferenceLinking']='https://github.com/pkp/crossrefReferenceLinking'
+                                    ['defaultTranslation']='https://github.com/pkp/defaultTranslation'
+                                    ['plagiarism']='https://github.com/pkp/plagiarism'
+                                    ['funding']='https://github.com/ajnyga/funding'
+                                    ['bootstrap3']='https://github.com/pkp/bootstrap3'
+                                    ['inlineHtmlGalley']='https://github.com/ulsdevteam/inlineHtmlGalley'
+#                                         ['']=''
+    )
+
+    
+#         knownCustomPlugins['addThis']="https://github.com/pkp/addThis/releases"
+    # Find all version.xml files (every plugin must have one) in current app instance
+    while read versionFile; do
+
+        # keep only the relative part of path within PKP application
+        pluginVersionFile="$(echo "$versionFile" | sed "s|${pkpAppCodePath}/||g")"
+        
+        # Skip if pluginVersionFile is PKP app's version file
+        if [[ $pluginVersionFile = 'dbscripts/xml/version.xml' ]]; then
+            continue
+        fi
+
+        # Check if pluginVersionFile exist in freshly extracted package of the same version
+        # If directory does not exist print pluginVersionFile
+                
+        if [[ ! -f ${pkpAppDownloads}/${pkpAppName}-${pkpAppVersion%.*}-${pkpAppVersion##*.}/${pluginVersionFile} ]]; then
+
+            pluginName="$(cat $versionFile | grep -v 'DOCTYPE version' | xmlstarlet sel -t -m "/version" -v application -n)"
+            
+            echo "$pluginName — ${knownCustomPlugins["$pluginName"]}"
+            echo -e "\t$pluginVersionFile\n\n"
+
+#             for key in "${!knownCustomPlugins[@]}"; do
+#                 if [[ $key = $pluginName ]]; then
+#                     echo "${key} - ${knownCustomPlugins["$key"]}"
+#                 fi
+#             done
+
+        fi
+
+    done <<<"$(find ${pkpAppCodePath} -type f -name 'version.xml')"
+    
+#     for key in "${!knownCustomPlugins[@]}"; do
+#         echo "$key"
+#         echo ${knownCustomPlugins["$key"]}
+#     done
 }
 
 function upgradePkpApp {
@@ -381,9 +445,10 @@ function checkPkpVersionPackage {
     checkIfSourceSet
     checkIfVersionSet
 
-    extractVersionReleaseFiles
+    extractVersionReleaseFiles "${1}"
 
 }
+
 
 function convertsecs() {
   ((h=${1}/3600))
@@ -412,17 +477,17 @@ function convertsecs() {
 #     checkIfVersionSet
 #     
 #     # check if $ompVersion package exists and extract it
-#     if [[ -f ${omara}/downloads/${pkpApp}-${pkpAppVersion}.tar.gz ]]; then
+#     if [[ -f ${omara}/downloads/${pkpAppName}-${pkpAppVersion}.tar.gz ]]; then
 #     
 #         # Check if package is already extracted / if it is: delete it
-#         if [[ -d ${omara}/downloads/${pkpApp}-${pkpAppVersion} ]]; then
-#             echo -e "Removing existing folder ${omara}/downloads/${pkpApp}-${pkpAppVersion} \n"
-#             rm -R ${omara}/downloads/${pkpApp}-${pkpAppVersion}
+#         if [[ -d ${omara}/downloads/${pkpAppName}-${pkpAppVersion} ]]; then
+#             echo -e "Removing existing folder ${omara}/downloads/${pkpAppName}-${pkpAppVersion} \n"
+#             rm -R ${omara}/downloads/${pkpAppName}-${pkpAppVersion}
 #         fi
 #         
 #         # Extract files from $ompVersion to ${pkpAppDownloads}/
 #         echo -e "Extracting version $ompVersion code \n"
-#         tar -xzf ${omara}/downloads/${pkpApp}-${pkpAppVersion}.tar.gz -C ${omara}/downloads
+#         tar -xzf ${omara}/downloads/${pkpAppName}-${pkpAppVersion}.tar.gz -C ${omara}/downloads
 # 
 #     else
 #         # Output error message
@@ -459,7 +524,7 @@ function convertsecs() {
 #     if [[ $ompSource == 'zzff' ]]; then
 #         sourceDir="${ompCode}"
 #     elif [[ $ompSource == 'release' ]]; then
-#         sourceDir="${omara}/downloads/${pkpApp}-${pkpAppVersion}"
+#         sourceDir="${omara}/downloads/${pkpAppName}-${pkpAppVersion}"
 #         if [[ ! -d $sourceDir ]]; then
 #             checkOMPVersionPackage
 #         fi
@@ -521,10 +586,6 @@ function parseOutput() {
 # 4     underline
 
 reset=$'\e[0m'
-noitalic=$'\e[23m'
-normalitensity=$'\e[22m'
-nounderline=$'\e[24m'
-
 bold=$'\e[1m'
 faint=$'\e[2m'
 italic=$'\e[3m'
@@ -553,12 +614,12 @@ white=$'\e[0;37m'
       echo -e "\n${red}${bold}${underline}${2}${reset}\n"
     ;;
 
-    warning)
-      echo -e "\n${purple}${bold}${2}${reset}\n"
-    ;;
-
     emphasis)
       echo -e "\n${cyan}${italic}" "${2}" "${reset}\n"
+    ;;
+
+    warning)
+      echo -e "\n${magenta}${italic}" "${2}" "${reset}\n"
     ;;
 
   esac
