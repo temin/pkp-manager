@@ -8,6 +8,10 @@ case "$1" in
         # Check if application type is specified
         if [[ -z $pkpApp  && $subcommand != 'sync-backup' ]]; then
             printf "\n\t%s\n\n" "PKP application is not defined"
+            # To-Do: print apps configured in config-local.inc.sh
+#             for app in ${list_availablePkpApps}; do
+#                 echo "${app}
+#             done
             exit 1
         fi
         
@@ -20,7 +24,7 @@ case "$1" in
     config_check-dir-file)
     
         # Check if necessary directories/files exist
-        checkDirectories=($pkpRootPath $pkpBackupRootPath $pkpWebRootPath $pkpAppBackupRootPath $pkpAppCodePath $pkpAppDataPath $pkpAppStorage $pkpAppDownloads)
+        checkDirectories=($pkpRootPath $pkpBackupRootPath $pkpWebRootPath $pkpAppBackupRootPath $pkpAppCodePath $pkpAppDataPath $pkpAppStorage $pkpAppDownloads $pkpAppDownloadsTmp)
         checkFiles=($backupServerSSHKey $pkpAppDatabaseBackupFile)
 
         #####

@@ -8,23 +8,27 @@ while getopts ":a:v:u:l:sd:" opt; do
     case $opt in
 
         a)  # --application / PKP application name
+            #   as defined in config-local.inc.sh
             pkpApp="$OPTARG"
             ;;
-    
-        v)  # --version / PKP application version
-            # If option is 'local' check locally installed PKP application
-            if [[ $OPTARG = 'local' ]]; then
-#                 pkpAppVersion="${pkpAppCodeVersion}"
-                pkpSource="zzff"
-            elif [[ $OPTARG = 'latest' ]]; then
-                configPostProcessing["pkpAppVersion"]="latest"
-                #pkpAppVersion="$(getLatestVersionNumber)"
-                pkpSource="release"                
-            else
-                pkpAppVersion="$OPTARG"
-                pkpSource="release"
-            fi
-            ;;
+
+### BEGIN To-Do: commented out on 20240131 - delete if not needed ###
+### Variable pkpAppVersion now defined in config.inc.sh
+#         v)  # --version / PKP application version
+#             # If option is 'local' check locally installed PKP application
+#             if [[ $OPTARG = 'local' ]]; then
+# #                 pkpAppVersion="${pkpAppCodeVersion}"
+#                 pkpSource="zzff"
+#             elif [[ $OPTARG = 'latest' ]]; then
+#                 configPostProcessing["pkpAppVersion"]="latest"
+#                 #pkpAppVersion="$(getLatestVersionNumber)"
+#                 pkpSource="release"                
+#             else
+#                 pkpAppVersion="$OPTARG"
+#                 pkpSource="release"
+#             fi
+#             ;;
+### END commented out on 20240131 - delete if not needed ###
         
         u)  # --upgrade-version / PKP application version to upgrade to
             # i.e. 3.4.0-3
@@ -105,23 +109,34 @@ case "$subcommand" in
 
     prepare-upgrade)
         checkIfRoot "${subcommand}"
-        checkIfVersionSet
-        prepareNewVersionCode "${pkpAppVersion}"
+        checkIf_pkpAppUpgradeVersion
+        getVersionReleaseFiles $pkpAppVersion
+        getVersionReleaseFiles $pkpAppUpgradeVersion
+        get_customPlugins
+        download_customPlugins
+#         prepare_missingCustomPlugins
+        prepare_upgradeVersionCode
     ;;
 
     upgrade)
         checkIfRoot "${subcommand}"
-        checkIfVersionSet
+        checkIf_pkpAppUpgradeVersion
         upgradePkpApp
         fixCodeFilePermissions
-        fixDataFilePermissions
+#         fixDataFilePermissions
     ;;
 
     test)
         getLocalInstanceAppCodeVersion
-        copyConfigurationFile
+#         copyConfigurationFile
+        echo $pkpAppVersion
     ;;
-
+    
+    fix-file-permissions)
+        fixCodeFilePermissions
+        fixDataFilePermissions
+    ;;
+    
     *)
         echo "The subcommand is missing!"
         exit 1

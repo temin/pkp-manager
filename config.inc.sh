@@ -19,21 +19,21 @@ source config-local.inc.sh "${pkpApp}"
 ## Directories
 pkpAppStorage="${pkpStorage}/${pkpApp}"
 pkpAppDownloads="${pkpAppStorage}/downloads"
+pkpAppDownloadsTmp="${pkpAppDownloads}/tmp"
 
 pkpAppDatabaseBackupFile="$(find ${pkpBackupRootPath}/backups/ -type f -name "${pkpApp}*")"
 
 # Run checks and tests on configured files and directories variables
 source lib_tests.inc.sh "config_check-dir-file"
 
-# Configuration post-processing
-for key in ${!configPostProcessing[@]}; do
-    
-    value="${configPostProcessing["${key}"]}"
-    
-    if [[ ${key} == 'pkpAppVersion'  &&  ${value} == 'latest' ]]; then
+### BEGIN To-Do: commented out on 20240131 - delete if not needed ###
+# # Configuration post-processing
+# for key in ${!configPostProcessing[@]}; do
+# 
+#     value="${configPostProcessing["${key}"]}"
+# 
+# done
+### END To-Do: commented out on 20240131 - delete if not needed ###
 
-        pkpAppVersion=$(getLatestVersionNumber)
-        
-    fi
-
-done
+# Define version number of app's local instance
+getLocalInstanceAppCodeVersion

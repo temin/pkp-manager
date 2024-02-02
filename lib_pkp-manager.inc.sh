@@ -1,20 +1,6 @@
-#
+###########
 # Functions Library for Managing OMP Test Installation
 #
-
-# Fixed variables
-# rootFolder="/home/strezniki/localhost/knjigeFF"
-# ompRoot="${rootFolder}/e-knjige"
-# ompCode="${rootFolder}/e-knjige/omp"
-# ompData="${rootFolder}/e-knjige/omp-data"
-# omara="${rootFolder}/omara"
-# backupRoot="${rootFolder}/var/www/e-knjige"
-# languagePackRoot="/home/mitja/omara/PROJEKTI/prevajanje/pkp/jezikovni-paketi/omp"
-# 
-# 
-# mysqlBaza="omp"
-# mysqlUporabnik="omp"
-# mysqlGeslo="geslo"
 
 # Local configuration post-processing array
 # Setting variables that require script options and local configuration to be pre-processed
@@ -83,7 +69,19 @@ function checkIfVersionSet {
         exit 1
     fi
 
-    }
+}
+
+
+function checkIf_pkpAppUpgradeVersion {
+
+    # Checks if $pkpAppUpgradeVersion variable is set and exit if not
+    if [ -z $pkpAppUpgradeVersion ]; then
+        echo -e "The variable \e[3m pkpAppUpgradeVersion \e[0m must have a value!"
+        echo -e "Please run pkp-manager script with option \e[3m -u \e[0m."
+        exit 1
+    fi
+
+}
 
 
 # Synchronize local backup files with latest version on backup server
@@ -264,12 +262,12 @@ function fixDataFilePermissions {
     }
 
 
-function extractVersionReleaseFiles() {
+function getVersionReleaseFiles() {
 
     local pkpAppVersion="${1}"
     # Check the number of numbers in the version number
     versionVariant="$(echo ${pkpAppVersion} | awk -F'.' '{print NF}')"
-
+    
     if [[ ${versionVariant} == 4 ]]; then
 
       pkpAppReleaseFileName="${pkpAppName}-${pkpAppVersion%.*}-${pkpAppVersion##*.}.tar.gz"
@@ -286,7 +284,7 @@ function extractVersionReleaseFiles() {
         local downloadURL="https://pkp.sfu.ca/${pkpAppName}/download/${pkpAppReleaseFileName}"
         wget --directory-prefix=$pkpAppDownloads $downloadURL
     else
-        parseOutput emphasis "Release archive for ${pkpAppName} version $pkpAppVersion is already downloaded."
+        parseOutput emphasis "Release archive for ${pkpAppName} version $pkpAppVersion is already downloaded in $pkpAppDownloads directory."
     fi
 
     # Check if version release file was successfuly downloaded
@@ -305,23 +303,18 @@ function extractVersionReleaseFiles() {
     fi
 
     parseOutput emphasis "Extracting release archive for ${pkpAppName} version $pkpAppVersion to ${pkpAppDownloads}"
-#     cd ${pkpAppDownloads}/
-#     pwd
-#     echo "${pkpAppDownloads}/${pkpAppReleaseFileName}"
     tar -xzf ${pkpAppDownloads}/${pkpAppReleaseFileName} -C ${pkpAppDownloads}
 
-    }
+}
 
-function prepareNewVersionCode() {
+function prepare_upgradeVersionCode() {
 
-    extractVersionReleaseFiles "${1}"
-
-    cp ${pkpAppCodePath}/config.inc.php ${pkpAppDownloads}/${pkpAppReleaseFileName%.tar.gz}/
+    cp ${pkpAppStorage}/config-files/config.inc.php.${pkpAppUpgradeVersion} ${pkpAppDownloads}/${pkpAppReleaseFileName%.tar.gz}/config.inc.php
     cp ${pkpAppCodePath}/.htaccess ${pkpAppDownloads}/${pkpAppReleaseFileName%.tar.gz}/
     cp -R ${pkpAppCodePath}/public ${pkpAppDownloads}/${pkpAppReleaseFileName%.tar.gz}/
 
-    if [[ -d ${pkpAppDownloads}/plugins-${pkpAppVersion} ]]; then
-      rsync -a ${pkpAppDownloads}/plugins-${pkpAppVersion}/plugins ${pkpAppDownloads}/${pkpAppReleaseFileName%.tar.gz}/
+    if [[ -d ${pkpAppDownloads}/plugins-${pkpAppUpgradeVersion} ]]; then
+      rsync -a ${pkpAppDownloads}/plugins-${pkpAppUpgradeVersion}/plugins ${pkpAppDownloads}/${pkpAppReleaseFileName%.tar.gz}/
     fi
     
     if [[ -d ${pkpAppCodePath}.old ]]; then
@@ -331,7 +324,10 @@ function prepareNewVersionCode() {
     mv ${pkpAppDownloads}/${pkpAppReleaseFileName%.tar.gz} ${pkpAppCodePath}
     chmod -R 777 ${pkpAppCodePath}
 
-    }
+    if [[ ${pkpAppUpgradeVersion} = '3.4.0.4' ]]; then
+        rm /var/www/journals-test.uni-lj.si/ojs-data/usageStats/reject/*
+    fi
+}
 
 function getLatestVersionNumber {
 
@@ -340,59 +336,16 @@ function getLatestVersionNumber {
 
 }
 
-function compareFiles {
-
-#     # Check the installed PKP app version
-#     # Returns $pkpAppVersion i.e. 3.3.0.13
-# 
-#     getLocalInstanceAppCodeVersion
-# 
-#     # Checks/Prepares $pkpAppVersion release files
-#     checkPkpVersionPackage "${pkpAppVersion}"
+function get_customPlugins {
 
     # Find all directories in existing local PKP app installation
     parseOutput title "Searching plugins for $pkpApp in ${pkpAppCodePath}"
     parseOutput emphasis "List of plugins that were not found in original release package:"
-    
-    # To-Do:
-    #   PKP Plugins List: http://pkp.sfu.ca/ojs/xml/plugins.xml
-    #   bash: xmllint
-    #   
-#         # Get plugin data from plugins.xml file
-#         
-#         # If: plugins.xml file exists and is no more than one day old
-#         ## Read cached API data
-#         if [[ -f ${pkpAppDownloads}/${pkpAppPluginsXml} ]] && [[ $(date -r ${pkpAppDownloads}/${pkpAppPluginsXml} +%s > $(date -d "now -1 day" +%s) ]]; then
-# 
-#             echo "Reading cached plugins data"
-#             
-# 
-#         # Else: 
-#         ## Download new plugins.xml file
-#         else
-#             echo "Downloading plugins.xml file"
-#             
-#         fi
-    
-    declare -A customPlugins
-    declare -A knownCustomPlugins=( ['addThis']="https://github.com/pkp/addThis/releases"
-                                    ['piwik']="https://github.com/pkp/piwik/releases"
-                                    ['customHeader']="https://github.com/pkp/customHeader/releases"
-                                    ['translator']="https://github.com/pkp/translator/releases"
-                                    ['citations']='https://github.com/RBoelter/citations/releases'
-                                    ['quickSubmit']='https://github.com/pkp/quickSubmit'
-                                    ['crossrefReferenceLinking']='https://github.com/pkp/crossrefReferenceLinking'
-                                    ['defaultTranslation']='https://github.com/pkp/defaultTranslation'
-                                    ['plagiarism']='https://github.com/pkp/plagiarism'
-                                    ['funding']='https://github.com/ajnyga/funding'
-                                    ['bootstrap3']='https://github.com/pkp/bootstrap3'
-                                    ['inlineHtmlGalley']='https://github.com/ulsdevteam/inlineHtmlGalley'
-#                                         ['']=''
-    )
 
-    
-#         knownCustomPlugins['addThis']="https://github.com/pkp/addThis/releases"
+    declare -gA customPlugins
+
     # Find all version.xml files (every plugin must have one) in current app instance
+    parseOutput emphasis "Searching instance plugins in ${pkpAppCodePath}"
     while read versionFile; do
 
         # keep only the relative part of path within PKP application
@@ -405,29 +358,180 @@ function compareFiles {
 
         # Check if pluginVersionFile exist in freshly extracted package of the same version
         # If directory does not exist print pluginVersionFile
-                
+
         if [[ ! -f ${pkpAppDownloads}/${pkpAppName}-${pkpAppVersion%.*}-${pkpAppVersion##*.}/${pluginVersionFile} ]]; then
 
+            # Parse plugin version file
             pluginName="$(cat $versionFile | grep -v 'DOCTYPE version' | xmlstarlet sel -t -m "/version" -v application -n)"
+            pluginType="$(cat $versionFile | grep -v 'DOCTYPE version' | xmlstarlet sel -t -m "/version" -v type -n)"
             
-            echo "$pluginName — ${knownCustomPlugins["$pluginName"]}"
-            echo -e "\t$pluginVersionFile\n\n"
-
-#             for key in "${!knownCustomPlugins[@]}"; do
-#                 if [[ $key = $pluginName ]]; then
-#                     echo "${key} - ${knownCustomPlugins["$key"]}"
-#                 fi
-#             done
+            parseOutput emphasis1 "$pluginName"
+            echo -e "\tFile path:$pluginVersionFile"
+            echo -e "\tType: $pluginType\n\n"
+            
+            customPlugins["$pluginName"]="$versionFile"
 
         fi
 
     done <<<"$(find ${pkpAppCodePath} -type f -name 'version.xml')"
-    
-#     for key in "${!knownCustomPlugins[@]}"; do
-#         echo "$key"
-#         echo ${knownCustomPlugins["$key"]}
-#     done
+
 }
+
+function download_customPlugins {
+
+    parseOutput title "Dowloading custom plugins for version ${pkpAppUpgradeVersion}"
+    
+    # Plugin Gallery https://github.com/pkp/plugin-gallery/
+    local pluginsUrl="https://pkp.sfu.ca/ojs/xml/plugins.xml"
+
+    pkpAppPluginsXml="${pkpAppDownloads}/plugins.xml"
+    
+    # Define directory for upgrade version plugin files
+    pkpAppDownloads_plugins="${pkpAppDownloads}/plugins-${pkpAppUpgradeVersion}"
+    
+    # Create directory if missing
+    if [[ ! -d ${pkpAppDownloads_plugins} ]]; then
+        mkdir ${pkpAppDownloads_plugins}
+    fi
+    
+    # If: exists -remove plugins subfolder
+    if [[ -d ${pkpAppDownloads_plugins}/plugins ]]; then
+        rm -R ${pkpAppDownloads_plugins}
+    fi
+    
+
+    # If: plugins.xml file exists and is no more than one day old
+    ## Read cached API data
+    if [[ -f ${pkpAppPluginsXml} ]] && [[ $(date -r ${pkpAppPluginsXml} +%s) > $(date -d "now -1 day" +%s) ]]; then
+
+        echo "Reading cached plugins data from ${pkpAppPluginsXml}"        
+        
+    else
+
+        echo "Downloading plugins.xml file"
+        wget --directory-prefix=$pkpAppDownloads_plugins ${pluginsUrl}
+        
+    fi
+
+    for key in "${!customPlugins[@]}"; do
+
+        parseOutput emphasis "Processing plugin: ${key}"
+
+        local pluginPath="${customPlugins["$key"]}"
+        declare -a plugin_Urls
+        declare -gA plugins_missingVersion
+
+        xpath_match="//_:plugin[@product=\"${key}\"]/_:release[contains(_:compatibility/_:version, \"3.4.0.\")]"
+        xpath_valueOf="_:package"
+
+        plugin_Urls+=($(xmlstarlet sel -t -m "${xpath_match}" -v ${xpath_valueOf} -n ${pkpAppPluginsXml}))
+
+        plugin_numberOfVersions="${#plugin_Urls[@]}"
+        
+        # If: no URLs - add to array to display in a list of missing plugin versions
+        if [[ ${plugin_numberOfVersions} = 0 ]]; then
+
+            parseOutput warning "Mising plugin version for ${pkpAppUpgradeVersion}"
+            xpath_matchHomepage="//_:plugin[@product=\"${key}\"]"
+            xpath_valueOfHomepage="_:homepage"
+            plugins_missingVersion["${key}"]="$(xmlstarlet sel -t -m "${xpath_matchHomepage}" -v ${xpath_valueOfHomepage} -n ${pkpAppPluginsXml})"
+
+        # If: one URL - check if is laready downloaded and download if it's not
+        elif [[ ${plugin_numberOfVersions} = 1 ]]; then
+
+            downloadPluginReleaseFile ${key} ${plugin_Urls[0]}
+            prepare_customPlugins ${key} ${plugin_Urls[0]}
+
+        # If: multiple URLs > download the last one
+        else
+
+            i=$((${plugin_numberOfVersions} - 1))
+            downloadPluginReleaseFile ${key} ${plugin_Urls[${i}]}
+            prepare_customPlugins ${key} ${plugin_Urls[${i}]}
+
+        fi
+        
+        unset plugin_Urls
+
+    done
+
+    
+    parseOutput title "Plugins with no version for ${pkpAppVersion}"
+    for plugin in "${!plugins_missingVersion[@]}"; do
+        echo -e "\t${plugin} -> ${plugins_missingVersion["${plugin}"]}"       
+    done
+
+}
+
+function downloadPluginReleaseFile() {
+    
+    local plugin_name="${1}"
+    local plugin_downloadUrl="${2}"
+    local plugin_fileName="$(basename ${plugin_downloadUrl})"
+
+    # If: plugin release file is already dowwnloaded
+    if [[ -f ${pkpAppDownloads_plugins}/${plugin_fileName} ]]; then
+        echo -e "\tPlugin release file already downloaded in ${pkpAppDownloads_plugins}"
+    # Else: download it
+    else
+        echo -e "\tDownloading ${plugin_downloadUrl} to ${pkpAppDownloads_plugins}"
+        wget --directory-prefix=${pkpAppDownloads_plugins} ${plugin_downloadUrl}
+    fi
+}
+
+function prepare_customPlugins {
+
+    local plugin_name="${1}"
+    local plugin_downloadUrl="${2}"
+    local plugin_fileName="$(basename ${plugin_downloadUrl})"
+    local plugin_versionFile="${pkpAppDownloads_plugins}/${plugin_name}/version.xml"
+
+    # Unpack the plugin files
+    tar -xzf ${pkpAppDownloads_plugins}/${plugin_fileName} -C ${pkpAppDownloads_plugins}
+
+    # Parse plugin version file
+    pluginType="$(cat $plugin_versionFile | grep -v 'DOCTYPE version' | xmlstarlet sel -t -m "/version" -v type -n)"
+    
+    # If directory does not exist - create it
+    local plugin_directoryPath="${pkpAppDownloads_plugins}/$(echo ${pluginType} | tr '.' '/')"
+    if [[ ! -d ${plugin_directoryPath} ]]; then
+        mkdir -p ${plugin_directoryPath}
+    fi
+    # Move them to ${pkpAppDownloads}/plugins-${pkpAppVersion} 
+    mv ${pkpAppDownloads_plugins}/${plugin_name} ${plugin_directoryPath}
+}
+
+function prepare_missingCustomPlugins {
+
+    parseOutput title "Preparing plugins with manualy downloaded release file for ${pkpAppVersion}"
+    
+#    local plugin_name="${1}"
+
+    for plugin in "${!plugins_missingVersion[@]}"; do
+
+        # Find the correct release file
+        local plugin_name="${plugin}"
+        local plugin_filePath="$(find ${pkpAppDownloads_plugins} -type f -name "${plugin_name}*")"
+        local plugin_fileName="$(basename ${plugin_filePath})"
+        local plugin_versionFile="${pkpAppDownloads_plugins}/${plugin_name}/version.xml"
+
+        # Unpack the plugin files
+        tar -xzf ${pkpAppDownloads_plugins}/${plugin_fileName} -C ${pkpAppDownloads_plugins}
+
+        # Parse plugin version file
+        pluginType="$(cat $plugin_versionFile | grep -v 'DOCTYPE version' | xmlstarlet sel -t -m "/version" -v type -n)"
+
+        # If directory does not exist - create it
+        local plugin_directoryPath="${pkpAppDownloads_plugins}/$(echo ${pluginType} | tr '.' '/')"
+        if [[ ! -d ${plugin_directoryPath} ]]; then
+            mkdir -p ${plugin_directoryPath}
+        fi
+        # Move them to ${pkpAppDownloads}/plugins-${pkpAppVersion} 
+        mv ${pkpAppDownloads_plugins}/${plugin_name} ${plugin_directoryPath}
+    done
+}
+
+
 
 function upgradePkpApp {
 
@@ -436,16 +540,6 @@ function upgradePkpApp {
     sed 's/installed = On/installed = Off/' -i config.inc.php
     sudo -u ${pkpAppPhpPoolUser} php tools/upgrade.php upgrade
     sed 's/installed = Off/installed = On/' -i config.inc.php
-
-    }
-
-function checkPkpVersionPackage {
-
-    # Check if all needed variables are set
-    checkIfSourceSet
-    checkIfVersionSet
-
-    extractVersionReleaseFiles "${1}"
 
 }
 
@@ -616,6 +710,10 @@ white=$'\e[0;37m'
 
     emphasis)
       echo -e "\n${cyan}${italic}" "${2}" "${reset}\n"
+    ;;
+
+    emphasis1)
+      echo -e "\n${green}${italic}" "${2}" "${reset}\n"
     ;;
 
     warning)
