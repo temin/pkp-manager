@@ -3,7 +3,7 @@
 # Get the Functions Library
 source lib_pkp-manager.inc.sh
 
-while getopts ":a:v:u:l:sd:" opt; do
+while getopts ":a:v:u:l:d:t" opt; do
 
     case $opt in
 
@@ -31,22 +31,20 @@ while getopts ":a:v:u:l:sd:" opt; do
 ### END commented out on 20240131 - delete if not needed ###
         
         u)  # --upgrade-version / PKP application version to upgrade to
-            # i.e. 3.4.0-3
+            # i.e. 3.4.0.5
             pkpAppUpgradeVersion="${OPTARG}"
         
         ;;
-        l)  # --locale / PKP application locale
-            pkpLocale="$OPTARG"
-            ;;
 
-#         s)  # --sync / Sync local backup files with backup server
-#             checkIfSSHKey
-#             syncBackupFiles
-#             ;;
+        l)  # --locale / PKP application locale
+            pkpAppLocale="$OPTARG"
+        ;;
 
         d)  # --database / Use full or trimmed database
             if [[ $OPTARG =~ ^(full|trim)$ ]]; then
                 syncDatabaseVersion="$OPTARG"
+            elif [[ $OPTARG = 'latest' ]]; then
+                databaseBackupDate="$OPTARG"
             elif [[ $OPTARG =~ ^20[0-9]{6}-[0-9]$ ]]; then 
                 databaseBackupDate="$OPTARG"
             else
@@ -54,6 +52,10 @@ while getopts ":a:v:u:l:sd:" opt; do
                 exit 1
             fi
             ;;
+
+        t)  # --test-run / Run script with commands printed out instead of executed
+            testRun=1
+        ;;
 
         \?)
             echo "Invalid option: -$OPTARG" >&2
@@ -85,15 +87,29 @@ case "$subcommand" in
 #         pkpConvertDatabase
     ;;
 
+    finish-sync)
+    
+        checkIfRoot "${subcommand}"
+        emptyDatabase
+        importDatabase
+        copyConfigurationFiles
+        fixCodeFilePermissions
+        fixDataFilePermissions
+
+    ;;
+
     sync-database)
     
         checkIfRoot "${subcommand}"
         emptyDatabase
         importDatabase
         copyConfigurationFile
+
+    ;;
+
+    fix-file-permissions)
         fixCodeFilePermissions
         fixDataFilePermissions
-    
     ;;
 
     sync-local-app)
@@ -107,34 +123,64 @@ case "$subcommand" in
         fixDataFilePermissions
     ;;
 
-    prepare-upgrade)
+    prepare-upgrade-core)
         checkIfRoot "${subcommand}"
         checkIf_pkpAppUpgradeVersion
         getVersionReleaseFiles $pkpAppVersion
         getVersionReleaseFiles $pkpAppUpgradeVersion
         get_customPlugins
         download_customPlugins
-#         prepare_missingCustomPlugins
-        prepare_upgradeVersionCode
     ;;
 
-    upgrade)
+    upgrade-core)
         checkIfRoot "${subcommand}"
         checkIf_pkpAppUpgradeVersion
+        prepare_upgradeVersionCode
         upgradePkpApp
-        fixCodeFilePermissions
-#         fixDataFilePermissions
     ;;
 
-    test)
-        getLocalInstanceAppCodeVersion
-#         copyConfigurationFile
-        echo $pkpAppVersion
+    prepare-upgrade-plugins)
+        checkIfRoot "${subcommand}"
+        checkIf_pkpAppUpgradeVersion
+        prepare_missingCustomPlugins "paperbuzz dates"
     ;;
+
+    upgrade-plugins)
+        checkIfRoot "${subcommand}"
+        checkIf_pkpAppUpgradeVersion
+        prepare_upgradeVersionPlugins
+        fixCodeFilePermissions
+        upgradePkpApp
+    ;;
+
+    cleanup-failed-upgrade)
     
+        parseOutput title "Cleaning up after failed update"
+        mysqlDump_fileName="$(find ../journals-test.uni-lj.si/ -name "${pkpAppName}-UL-${pkpAppName}-*.sql.gz" | sort | tail -1)"
+    
+        # Drop database
+        parseOutput emphasis "Droping all tables from ${mysqlDump_fileName}"
+        mysqldump --add-drop-table --no-data ${pkpAppDatabaseName} \
+            | grep -e '^DROP TABLE' \
+            | (echo "SET FOREIGN_KEY_CHECKS=0;"; cat; echo "SET FOREIGN_KEY_CHECKS=1;") \
+            | mysql ${pkpAppDatabaseName}
+
+        # Import latest local database backup copy
+        parseOutput emphasis "Importing ${mysqlDump_fileName} to ${mysqlDump_fileName} "
+        zcat ${mysqlDump_fileName} \
+            | sed '/INSERT INTO `metrics`/d' \
+            | sed '/INSERT INTO `submission_search_object_keywords`/d' \
+            | mysql ${pkpAppDatabaseName}
+
+    ;;
+
     fix-file-permissions)
         fixCodeFilePermissions
         fixDataFilePermissions
+    ;;
+    
+    test)
+        checkUpgradePkpApp
     ;;
     
     *)
@@ -172,48 +218,48 @@ case "$subcommand" in
 #     done <<<"$(listLocaleFiles "$ompLocale")"
 #   ;;
 #   
-#   save-locale-files)
-#     
-#     # Check if all needed variables are set
-#     checkIfVersionSet
-#     checkIfLocaleSet
-#     
-#     # Root folder for language pack
-#     if [[ $ompSource == 'zzff' ]]; then
-#         langPackRootSource="$ompCode"
-#         langPackRootDestination="$languagePackRoot/$ompVersion/$ompLocale-zzff"
-#     elif [[ $ompSource == 'release' ]]; then
-#         langPackRootSource="${omara}/downloads/omp-$ompVersion"
-#         langPackRootDestination="$languagePackRoot/$ompVersion/$ompLocale-release"
-#     fi
-#     
-#     # Check if language package folder already exsist / create it
-#     if [[ -d $langPackRootDestination ]]; then
-#         echo "Files for version $ompVersion and locale $ompLocale already exist."
-# #         exit 1
-#     else
-#         mkdir -p $langPackRootDestination
-#     fi
-# 
-#     while read localeFile; do
-#     
-#         # Get relative file path
-#         foundFile="$(echo "$localeFile" | sed "s|${langPackRootSource}/||g")"
-#         
-#         # Check if language pack folder exists / create it
-#         if [[ ! -d $(dirname $langPackRootDestination/$foundFile) ]]; then
-#             mkdir -p $(dirname $langPackRootDestination/$foundFile)
-#         fi
-#         
-#         # Copy the locale file to $langPackRootDestination
-#         cp $localeFile $langPackRootDestination/$foundFile 
-#     
-#     done <<<"$(listLocaleFiles)"
-# 
-#     # Change language pack file ownership
-#     chown -R mitja:mitja $langPackRootDestination
-#     
-#   ;;
+  save-locale-files)
+    
+    # Check if all needed variables are set
+    checkIfVersionSet
+    checkIfLocaleSet
+    
+    # Root folder for language pack
+    if [[ $ompSource == 'zzff' ]]; then
+        langPackRootSource="$ompCode"
+        langPackRootDestination="$languagePackRoot/$ompVersion/$ompLocale-zzff"
+    elif [[ $ompSource == 'release' ]]; then
+        langPackRootSource="${omara}/downloads/omp-$ompVersion"
+        langPackRootDestination="$languagePackRoot/$ompVersion/$ompLocale-release"
+    fi
+    
+    # Check if language package folder already exsist / create it
+    if [[ -d $langPackRootDestination ]]; then
+        echo "Files for version $ompVersion and locale $ompLocale already exist."
+#         exit 1
+    else
+        mkdir -p $langPackRootDestination
+    fi
+
+    while read localeFile; do
+    
+        # Get relative file path
+        foundFile="$(echo "$localeFile" | sed "s|${langPackRootSource}/||g")"
+        
+        # Check if language pack folder exists / create it
+        if [[ ! -d $(dirname $langPackRootDestination/$foundFile) ]]; then
+            mkdir -p $(dirname $langPackRootDestination/$foundFile)
+        fi
+        
+        # Copy the locale file to $langPackRootDestination
+        cp $localeFile $langPackRootDestination/$foundFile 
+    
+    done <<<"$(listLocaleFiles)"
+
+    # Change language pack file ownership
+    chown -R mitja:mitja $langPackRootDestination
+    
+  ;;
 #   
 #   *)
 #     echo -e "\n NAME"
@@ -234,4 +280,5 @@ esac
 
 
 # Izpis časa trajanja
+printf "\n |—> Script finished in %d seconds" $SECONDS
 convertsecs $SECONDS

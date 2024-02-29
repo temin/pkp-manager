@@ -24,8 +24,7 @@ case "$1" in
     config_check-dir-file)
     
         # Check if necessary directories/files exist
-        checkDirectories=($pkpRootPath $pkpBackupRootPath $pkpWebRootPath $pkpAppBackupRootPath $pkpAppCodePath $pkpAppDataPath $pkpAppStorage $pkpAppDownloads $pkpAppDownloadsTmp)
-        checkFiles=($backupServerSSHKey $pkpAppDatabaseBackupFile)
+        checkDirectories=($pkpRootPath $pkpBackupRootPath $pkpWebRootPath $pkpAppBackupRootPath $pkpAppCodePath $pkpAppDataPath $pkpAppStoragePath $pkpAppDownloads ${pkpAppTmpPath})
 
         #####
         # Directories and files checks #
@@ -33,19 +32,20 @@ case "$1" in
         a=0
         for d in ${checkDirectories[@]}; do
             a=$((a+1))
-            if [[ ! -d $d ]]; then
-                echo -e "\n Folder \e[3m\e[1m$d\e[0m is missing! \n"
+            if [[ ! -d ${d} ]]; then
+                echo -e "\n Folder \e[3m\e[1m${d}\e[0m is missing! \n"
                 echo $a
                 exit 1
             fi
         done
 
-        for f in ${checkFiles[@]}; do
-            if [[ ! -f $f ]]; then
-                echo -e "\n File \e[3m\e[1m$f\e[0m is missing! \n"
-                exit 1
-            fi
-        done
+# Currently (20240207) not needed
+#         for f in ${checkFiles[@]}; do
+#             if [[ ! -f $f ]]; then
+#                 echo -e "\n File \e[3m\e[1m$f\e[0m is missing! \n"
+#                 exit 1
+#             fi
+#         done
         
     ;;
 

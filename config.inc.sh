@@ -14,14 +14,10 @@ fi
 # Get local application variables
 source config-local.inc.sh "${pkpApp}"
 
+# Define directory for upgrade version plugin files
+pkpAppDownloads_plugins="${pkpAppDownloadsPath}/plugins-${pkpAppUpgradeVersion}"
+        
 ## No variables to edit below this line ##
-
-## Directories
-pkpAppStorage="${pkpStorage}/${pkpApp}"
-pkpAppDownloads="${pkpAppStorage}/downloads"
-pkpAppDownloadsTmp="${pkpAppDownloads}/tmp"
-
-pkpAppDatabaseBackupFile="$(find ${pkpBackupRootPath}/backups/ -type f -name "${pkpApp}*")"
 
 # Run checks and tests on configured files and directories variables
 source lib_tests.inc.sh "config_check-dir-file"

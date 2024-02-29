@@ -17,32 +17,6 @@ function checkIfRoot {
 
     }
 
-
-# Check if SSH key for accessing backup server is loaded in SSH agent
-function checkIfSSHKey {
-
-    sshKey=0
-
-    while read agentKey; do
-        agentFingerprint="$(echo $agentKey | awk '{print $2}')"
-        keyFingerprint="$(ssh-keygen -l -f $backupServerSSHKey | awk '{print $2}')"
-        
-        if [[ $agentFingerprint != $keyFingerprint ]]; then
-            continue
-        else
-            local sshKey=1
-        fi
-        
-    done <<<$(ssh-add -l)
-
-    if [[ $sshKey -eq 0 ]]; then
-        echo -e "The required SSH key is not available in ssh-agent."
-        exit 1    
-    fi
-
-    }
-
-
 function checkIfSourceSet {
 
     # Checks if $ompSource variable is set and exit if not
@@ -51,8 +25,15 @@ function checkIfSourceSet {
         exit 1
     fi
 
-    }
+}
 
+function checkIfLocaleSet {
+    # Checks if $pkpAppLocale variable is set and exit if not
+    if [[ -z $pkpAppLocale ]]; then
+        echo -e "The variable \e[3mpkpAppLocale\e[0m must have a value!"
+        exit 1
+    fi
+}
 
 function getLocalInstanceAppCodeVersion {
 
@@ -75,30 +56,34 @@ function checkIfVersionSet {
 function checkIf_pkpAppUpgradeVersion {
 
     # Checks if $pkpAppUpgradeVersion variable is set and exit if not
-    if [ -z $pkpAppUpgradeVersion ]; then
+    if [ -z ${pkpAppUpgradeVersion} ]; then
         echo -e "The variable \e[3m pkpAppUpgradeVersion \e[0m must have a value!"
         echo -e "Please run pkp-manager script with option \e[3m -u \e[0m."
+        exit 1
+    fi
+
+    check_pkpAppVersionFormat
+
+}
+
+
+function check_pkpAppVersionFormat {
+
+    # Checks if $pkpAppUpgradeVersion variable is in the right format (three dots) version and exit if not
+    if [ "$(echo ${pkpAppUpgradeVersion} | awk -F'.' '{print NF}')" != 4 ]; then
+        parseOutput warning "The variable \e[3m pkpAppUpgradeVersion \e[0m is defined in wrong format!"
+        echo -e "\tPlease enter version number like \e[3m 3.4.0.5 \e[0m\n\n"
         exit 1
     fi
 
 }
 
 
-# Synchronize local backup files with latest version on backup server
-function syncBackupFiles {
-
-    echo "Syncing files from backupserver."
-    
-    rsync -rlt --delete --info=progress2 ${backupServerUser}:${backupServerDirectory}/ ${pkpBackupRootPath}
-
-    }
-
-
 # Sync local app code
 function syncAppCode {
 
     parseOutput title "Syncing ${pkpAppName}files"
-    rsync -a --delete --info=progress2 ${pkpAppBackupRootPath}/${pkpApp}/ ${pkpAppCodePath}
+    rsync -a --delete --info=progress2 ${pkpAppBackupPath}/${pkpApp}/ ${pkpAppCodePath}
 
     }
     
@@ -157,12 +142,13 @@ function pkpConvertDatabase {
 # 
 #     }
 
-function copyConfigurationFile {
+function copyConfigurationFiles {
 
     # Get local instance version: i.e. 3.3.0.13
     getLocalInstanceAppCodeVersion
     
-    cp ${pkpConfigFilePath}/config.inc.php.${pkpAppVersion} ${pkpAppCodePath}/config.inc.php
+    cp ${pkpAppConfigFilePath}/config.inc.php.${pkpAppVersion} ${pkpAppCodePath}/config.inc.php
+    cp ${pkpAppConfigFilePath}/robots.txt ${pkpAppCodePath}/robots.txt
 
 }
 
@@ -176,28 +162,28 @@ function fixConfigurationFile {
 
     fi
 
-    if [[ ! -f ${pkpConfigFilePath}/config.inc.php.${pkpAppCodeVersion} ]]; then
+    if [[ ! -f ${pkpAppConfigFilePath}/config.inc.php.${pkpAppCodeVersion} ]]; then
 
-        cp ${pkpAppCodePath}/config.inc.php ${pkpConfigFilePath}/config.inc.php.${pkpAppCodeVersion}
+        cp ${pkpAppCodePath}/config.inc.php ${pkpAppConfigFilePath}/config.inc.php.${pkpAppCodeVersion}
 
     fi
 
     #popravi konfiguracijsko datoteko
-    sed "/^\s*base_url/c\base_url = \"http://${pkpAppTestURL}\"" -i ${pkpConfigFilePath}/config.inc.php.${pkpAppCodeVersion}
-    sed "/^\s*session_cookie_name/c\session_cookie_name = ${pkpApp^^}SID-test" -i ${pkpConfigFilePath}/config.inc.php.${pkpAppCodeVersion}
-    sed '/^\s*driver/c\driver = mysqli' -i ${pkpConfigFilePath}/config.inc.php.${pkpAppCodeVersion}
-    sed "/^\s*username/c\username = ${pkpAppDatabaseUser}" -i ${pkpConfigFilePath}/config.inc.php.${pkpAppCodeVersion}
-    sed "/^\s*password/c\password = ${pkpAppDatabasePassword}" -i ${pkpConfigFilePath}/config.inc.php.${pkpAppCodeVersion}
-    sed "/^\s*name/c\name = ${pkpAppDatabaseName}" -i ${pkpConfigFilePath}/config.inc.php.${pkpAppCodeVersion}
-    sed "/^\s*cache/c\cache = none" -i ${pkpConfigFilePath}/config.inc.php.${pkpAppCodeVersion}
-    sed "/^\s*files_dir/c\files_dir = ${pkpAppDataPath}" -i ${pkpConfigFilePath}/config.inc.php.${pkpAppCodeVersion}
-    sed '/^\s*force_ssl/c\force_ssl = Off' -i ${pkpConfigFilePath}/config.inc.php.${pkpAppCodeVersion}
-    sed '/^;*\s*smtp =/c\smtp = On' -i ${pkpConfigFilePath}/config.inc.php.${pkpAppCodeVersion}
-    sed '/^;*\s*smtp_server/c\smtp_server = no.mail.mitja.kom' -i ${pkpConfigFilePath}/config.inc.php.${pkpAppCodeVersion}
-    sed '/^\s*oai =/c\oai = Off' -i ${pkpConfigFilePath}/config.inc.php.${pkpAppCodeVersion}
-    sed '/^\s*repository_id/c\repository_id = "no.oai.test.kom"' -i ${pkpConfigFilePath}/config.inc.php.${pkpAppCodeVersion}
+    sed "/^\s*base_url/c\base_url = \"http://${pkpAppTestURL}\"" -i ${pkpAppConfigFilePath}/config.inc.php.${pkpAppCodeVersion}
+    sed "/^\s*session_cookie_name/c\session_cookie_name = ${pkpApp^^}SID-test" -i ${pkpAppConfigFilePath}/config.inc.php.${pkpAppCodeVersion}
+    sed '/^\s*driver/c\driver = mysqli' -i ${pkpAppConfigFilePath}/config.inc.php.${pkpAppCodeVersion}
+    sed "/^\s*username/c\username = ${pkpAppDatabaseUser}" -i ${pkpAppConfigFilePath}/config.inc.php.${pkpAppCodeVersion}
+    sed "/^\s*password/c\password = ${pkpAppDatabasePassword}" -i ${pkpAppConfigFilePath}/config.inc.php.${pkpAppCodeVersion}
+    sed "/^\s*name/c\name = ${pkpAppDatabaseName}" -i ${pkpAppConfigFilePath}/config.inc.php.${pkpAppCodeVersion}
+    sed "/^\s*cache/c\cache = none" -i ${pkpAppConfigFilePath}/config.inc.php.${pkpAppCodeVersion}
+    sed "/^\s*files_dir/c\files_dir = ${pkpAppDataPath}" -i ${pkpAppConfigFilePath}/config.inc.php.${pkpAppCodeVersion}
+    sed '/^\s*force_ssl/c\force_ssl = Off' -i ${pkpAppConfigFilePath}/config.inc.php.${pkpAppCodeVersion}
+    sed '/^;*\s*smtp =/c\smtp = On' -i ${pkpAppConfigFilePath}/config.inc.php.${pkpAppCodeVersion}
+    sed '/^;*\s*smtp_server/c\smtp_server = no.mail.mitja.kom' -i ${pkpAppConfigFilePath}/config.inc.php.${pkpAppCodeVersion}
+    sed '/^\s*oai =/c\oai = Off' -i ${pkpAppConfigFilePath}/config.inc.php.${pkpAppCodeVersion}
+    sed '/^\s*repository_id/c\repository_id = "no.oai.test.kom"' -i ${pkpAppConfigFilePath}/config.inc.php.${pkpAppCodeVersion}
 
-    cp ${pkpConfigFilePath}/config.inc.php.${pkpAppCodeVersion} ${pkpAppCodePath}/config.inc.php
+    cp ${pkpAppConfigFilePath}/config.inc.php.${pkpAppCodeVersion} ${pkpAppCodePath}/config.inc.php
 
     }
 
@@ -213,30 +199,57 @@ function emptyDatabase {
 
 function importDatabase {
 
+    # If: date of database dump is defined with option -d [yyymmdd-hh]
     if [[ -n ${databaseBackupDate} ]]; then
-        parseOutput emphasis "Importing database dump ${pkpStorage}/${pkpApp}/ojs-UL-ojs-${databaseBackupDate}.sql.gz"
-        gunzip < "${pkpStorage}/${pkpApp}/ojs-UL-ojs-${databaseBackupDate}.sql.gz" | mysql -u $pkpAppDatabaseUser -p$pkpAppDatabasePassword $pkpAppDatabaseName 
+    
+        parseOutput emphasis "Importing from database dump version defined with -d option: ${databaseBackupDate}"
+
+        mysqlDump_fileName="${pkpAppStoragePath}/ojs-UL-ojs-${databaseBackupDate}.sql.gz"
+        
+    # Else: Select the latest backup file that is available in ${pkpAppBackupPath}
     else
-        # Import database backup
-#         parseOutput emphasis "Importing database dump ${pkpAppDatabaseBackupFile}"
-#         gunzip < $pkpAppDatabaseBackupFile | mysql -u $pkpAppDatabaseUser -p$pkpAppDatabasePassword $pkpAppDatabaseName 
-        echo 'Nope'
+
+        parseOutput emphasis "Importing the latest available database dump version"
+
+        mysqlDump_fileName="$(find ${pkpAppBackupPath} -name "${pkpAppName}-UL-${pkpAppName}-*.sql.gz" | sort | tail -1)"
+
     fi
-    }
 
-function importDatabaseMyDumper {
 
-    # Import database backup
-    parseOutput emphasis "Importing database dump ${pkpAppDatabaseBackupFile} with MyDumper"
-    pkpAppDatabaseBackupMyDumperFolder="/home/mitja/omara/strezniki/localhost/pkp/storage/ojs/downloads/export-20210202-122624"
-    myloader --database=$pkpAppDatabaseName --verbose=3 --threads 7 --directory=$pkpAppDatabaseBackupMyDumperFolder
+    # If: variable syncDatabaseVersion is defined with option -d [full|trim]
+    if [[ ${syncDatabaseVersion} = 'full' ]]; then
 
-    }
+        parseOutput emphasis "Importing full database dump ${mysqlDump_fileName}"
+
+        zcat ${mysqlDump_fileName} | mysql -u $pkpAppDatabaseUser -p$pkpAppDatabasePassword $pkpAppDatabaseName 
+
+    # Else: import trimmed version by default
+    else
+
+        parseOutput emphasis "Importing trimmed database dump ${mysqlDump_fileName}"
+
+        zcat ${mysqlDump_fileName} \
+            | sed '/INSERT INTO `metrics`/d' \
+            | sed '/INSERT INTO `submission_search_object_keywords`/d' \
+            | mysql -u $pkpAppDatabaseUser -p$pkpAppDatabasePassword ${pkpAppDatabaseName}
+    fi
+
+}
+
+# ToDo: Change backup script to make databasebackups with mydumper
+# function importDatabaseMyDumper {
+# 
+#     # Import database backup
+#     parseOutput emphasis "Importing database dump ${pkpAppDatabaseBackupFile} with MyDumper"
+#     pkpAppDatabaseBackupMyDumperFolder="/home/mitja/omara/strezniki/localhost/pkp/storage/ojs/downloads/export-20210202-122624"
+#     myloader --database=$pkpAppDatabaseName --verbose=3 --threads 7 --directory=$pkpAppDatabaseBackupMyDumperFolder
+# 
+#     }
 
 function fixCodeFilePermissions {
 
     parseOutput title "Handling files"
-    parseOutput emphasis "Setting PKP application code file permissions / ${pkpAppCodePath}"
+    parseOutput emphasis "Setting PKP application code file permissions in ${pkpAppCodePath}"
 
     # Fix PKP application code ownership and permissions
     chown -R administrator:www-data ${pkpAppCodePath}
@@ -254,7 +267,7 @@ function fixCodeFilePermissions {
 function fixDataFilePermissions {
 
     # Fix PKP application data ownership and permissions
-    parseOutput emphasis  "Setting PKP application data file permissions / $pkpAppDataPath"
+    parseOutput emphasis  "Setting PKP application data file permissions in $pkpAppDataPath"
     chown -R ${pkpAppPhpPoolUser}:www-data $pkpAppDataPath
     chmod 640 $pkpAppDataPath
     find $pkpAppDataPath -type d -exec chmod 750 {} +
@@ -265,30 +278,26 @@ function fixDataFilePermissions {
 function getVersionReleaseFiles() {
 
     local pkpAppVersion="${1}"
-    # Check the number of numbers in the version number
-    versionVariant="$(echo ${pkpAppVersion} | awk -F'.' '{print NF}')"
+    local pkpAppReleaseFileName="${pkpAppName}-${pkpAppVersion%.*}-${pkpAppVersion##*.}.tar.gz"
+    local pkpAppReleasePath="${pkpAppDownloadsPath}/${pkpAppName}-${pkpAppVersion}"
+
+    # Checks if supplied version number is in correct format
+    check_pkpAppVersionFormat
     
-    if [[ ${versionVariant} == 4 ]]; then
-
-      pkpAppReleaseFileName="${pkpAppName}-${pkpAppVersion%.*}-${pkpAppVersion##*.}.tar.gz"
-
-    elif [[ ${versionVariant} == 3 ]]; then
-
-      pkpAppReleaseFileName="${pkpAppName}-${pkpAppVersion}.tar.gz"
-
-    fi
-
     # Check if version release file exist / download it
-    if [[ ! -f ${pkpAppDownloads}/$pkpAppReleaseFileName ]]; then
+    if [[ ! -f ${pkpAppDownloadsPath}/$pkpAppReleaseFileName ]]; then
 
         local downloadURL="https://pkp.sfu.ca/${pkpAppName}/download/${pkpAppReleaseFileName}"
-        wget --directory-prefix=$pkpAppDownloads $downloadURL
+        wget --directory-prefix=$pkpAppDownloadsPath $downloadURL
+        
     else
-        parseOutput emphasis "Release archive for ${pkpAppName} version $pkpAppVersion is already downloaded in $pkpAppDownloads directory."
+    
+        parseOutput emphasis "Release archive for ${pkpAppName} version $pkpAppVersion is already downloaded in $pkpAppDownloadsPath directory."
+
     fi
 
     # Check if version release file was successfuly downloaded
-    if [[ ! -f ${pkpAppDownloads}/$pkpAppReleaseFileName ]]; then
+    if [[ ! -f ${pkpAppDownloadsPath}/$pkpAppReleaseFileName ]]; then
 
         echo -e "Release file ${pkpAppReleaseFileName} download was not successful!"
         exit 1
@@ -296,38 +305,95 @@ function getVersionReleaseFiles() {
     fi
 
     # Delete release folder if exists
-    if [[ -d ${pkpAppDownloads}/${pkpAppReleaseFileName%.tar.gz} ]]; then
+    if [[ -d ${pkpAppReleasePath} ]]; then
 
-        rm -R ${pkpAppDownloads}/${pkpAppReleaseFileName%.tar.gz}
+        rm -R ${pkpAppReleasePath}
 
     fi
 
-    parseOutput emphasis "Extracting release archive for ${pkpAppName} version $pkpAppVersion to ${pkpAppDownloads}"
-    tar -xzf ${pkpAppDownloads}/${pkpAppReleaseFileName} -C ${pkpAppDownloads}
+    parseOutput emphasis "Extracting release archive for ${pkpAppName} version $pkpAppVersion to ${pkpAppDownloadsPath}"
 
+    tar -xzf ${pkpAppDownloadsPath}/${pkpAppReleaseFileName} -C ${pkpAppDownloadsPath}
+
+    # Rename the directory name to 'three dots' release version number
+    mv ${pkpAppDownloadsPath}/${pkpAppReleaseFileName%.tar.gz} ${pkpAppReleasePath}
 }
 
 function prepare_upgradeVersionCode() {
 
-    cp ${pkpAppStorage}/config-files/config.inc.php.${pkpAppUpgradeVersion} ${pkpAppDownloads}/${pkpAppReleaseFileName%.tar.gz}/config.inc.php
-    cp ${pkpAppCodePath}/.htaccess ${pkpAppDownloads}/${pkpAppReleaseFileName%.tar.gz}/
-    cp -R ${pkpAppCodePath}/public ${pkpAppDownloads}/${pkpAppReleaseFileName%.tar.gz}/
+    # Check if config file for upgrade version exist
+    if [[ ! -f ${pkpAppConfigFilePath}/config.inc.php.${pkpAppUpgradeVersion} ]]; then
+    
+        parseOutput warning "Configuration file for version ${pkpAppUpgradeVersion} does not exist"
+        echo -e "\tCompare the current cofig file with newest available local version:"
 
-    if [[ -d ${pkpAppDownloads}/plugins-${pkpAppUpgradeVersion} ]]; then
-      rsync -a ${pkpAppDownloads}/plugins-${pkpAppUpgradeVersion}/plugins ${pkpAppDownloads}/${pkpAppReleaseFileName%.tar.gz}/
+        echo -e "\tcolordiff -y $(find ${pkpAppConfigFilePath} -name 'config.inc.php.*' | sort | tail -1) ${pkpAppDownloadsPath}/${pkpAppName}-${pkpAppUpgradeVersion}/config.TEMPLATE.inc.php"
+
+        exit 1
     fi
+
+    echo "Copying version ${pkpAppUpgradeVersion} code to ${pkpAppNewCodePath} directory"
+    cp -R ${pkpAppDownloadsPath}/${pkpAppName}-${pkpAppUpgradeVersion} ${pkpAppNewCodePath}/
+    
+    # Copy files from local instance to upgrade version
+    cp ${pkpAppConfigFilePath}/config.inc.php.${pkpAppUpgradeVersion} ${pkpAppNewCodePath}/config.inc.php
+    cp ${pkpAppCodePath}/.htaccess ${pkpAppNewCodePath}/
+    cp -R ${pkpAppCodePath}/public ${pkpAppNewCodePath}/
     
     if [[ -d ${pkpAppCodePath}.old ]]; then
       rm -R ${pkpAppCodePath}.old
     fi
+    
     mv ${pkpAppCodePath} ${pkpAppCodePath}.old
-    mv ${pkpAppDownloads}/${pkpAppReleaseFileName%.tar.gz} ${pkpAppCodePath}
+    mv ${pkpAppNewCodePath} ${pkpAppCodePath}
     chmod -R 777 ${pkpAppCodePath}
 
-    if [[ ${pkpAppUpgradeVersion} = '3.4.0.4' ]]; then
-        rm /var/www/journals-test.uni-lj.si/ojs-data/usageStats/reject/*
-    fi
+    # Checking for files that previously caused erros during upgrade
+    declare -a checkDirectory
+    checkDirectory+=("${pkpAppDataPath}/usageStats/reject")
+    checkDirectory+=("${pkpAppDataPath}/usageStats/usageEventLogs")
+    for directory in ${checkDirectory[@]}; do
+        if [[ -n $(ls -A ${directory} ) ]]; then
+          echo "Cleaning directory: ${directory}"
+          rm ${directory}/*
+        fi
+    done
+
+    parseOutput emphasis1 "Checking the upgrade"
+    cd ${pkpAppCodePath}
+    sudo -u ${pkpAppPhpPoolUser} php tools/upgrade.php check
 }
+
+function prepare_upgradeVersionPlugins {
+
+    if [[ -d ${pkpAppDownloads_plugins}/plugins ]]; then
+
+        parseOutput note "Copying ${pkpAppDownloads_plugins}/plugins to ${pkpAppCodePath}/"
+        cp -R ${pkpAppDownloads_plugins}/plugins ${pkpAppCodePath}/
+
+    else
+        parseOutput warning "Directory ${pkpAppDownloads_plugins}/plugins is missing."
+        exit 1
+    fi
+
+}
+
+function upgradePkpApp {
+
+    local upgrade_logFile="/home/administrator/upgrade-logs/upgrade_${pkpAppUpgradeVersion}_$(date +%Y%m%d-%H%M).log"
+
+    parseOutput title "Upgrading ${pkpAppName} to version ${pkpAppUpgradeVersion}"
+    parseOutput emphasis "Check logs with:"
+    echo -e "\t tail -f ${upgrade_logFile}"
+
+    cd ${pkpAppCodePath}
+    sed 's/installed = On/installed = Off/' -i config.inc.php
+    sudo -u ${pkpAppPhpPoolUser} bash -c "php tools/upgrade.php upgrade |& tee ${upgrade_logFile}"
+    sed 's/installed = Off/installed = On/' -i config.inc.php
+    parseOutput emphasis1 "\tUpgrade finished."
+    
+}
+
 
 function getLatestVersionNumber {
 
@@ -345,7 +411,7 @@ function get_customPlugins {
     declare -gA customPlugins
 
     # Find all version.xml files (every plugin must have one) in current app instance
-    parseOutput emphasis "Searching instance plugins in ${pkpAppCodePath}"
+    echo -e  "\tSearching instance plugins in ${pkpAppCodePath}"
     while read versionFile; do
 
         # keep only the relative part of path within PKP application
@@ -359,65 +425,67 @@ function get_customPlugins {
         # Check if pluginVersionFile exist in freshly extracted package of the same version
         # If directory does not exist print pluginVersionFile
 
-        if [[ ! -f ${pkpAppDownloads}/${pkpAppName}-${pkpAppVersion%.*}-${pkpAppVersion##*.}/${pluginVersionFile} ]]; then
+        if [[ ! -f ${pkpAppDownloadsPath}/${pkpAppName}-${pkpAppVersion}/${pluginVersionFile} ]]; then
 
             # Parse plugin version file
-            pluginName="$(cat $versionFile | grep -v 'DOCTYPE version' | xmlstarlet sel -t -m "/version" -v application -n)"
-            pluginType="$(cat $versionFile | grep -v 'DOCTYPE version' | xmlstarlet sel -t -m "/version" -v type -n)"
+            pluginName="$(xmlstarlet sel -t -v '//version/application' -n $versionFile)"
+            pluginType="$(xmlstarlet sel -t -v '//version/type' -n $versionFile)"
             
             parseOutput emphasis1 "$pluginName"
-            echo -e "\tFile path:$pluginVersionFile"
-            echo -e "\tType: $pluginType\n\n"
+            echo -e "\tFile path: $pluginVersionFile"
+            echo -e "\tType: $pluginType\n"
             
-            customPlugins["$pluginName"]="$versionFile"
+            customPlugins["$pluginName"]="$pluginType"
 
         fi
 
     done <<<"$(find ${pkpAppCodePath} -type f -name 'version.xml')"
 
+    parseOutput note "Found ${#customPlugins[@]} custom plugins."
 }
 
 function download_customPlugins {
 
     parseOutput title "Dowloading custom plugins for version ${pkpAppUpgradeVersion}"
-    
+
     # Plugin Gallery https://github.com/pkp/plugin-gallery/
     local pluginsUrl="https://pkp.sfu.ca/ojs/xml/plugins.xml"
 
-    pkpAppPluginsXml="${pkpAppDownloads}/plugins.xml"
-    
-    # Define directory for upgrade version plugin files
-    pkpAppDownloads_plugins="${pkpAppDownloads}/plugins-${pkpAppUpgradeVersion}"
-    
+    pkpAppPluginsXml="${pkpAppDownloadsPath}/plugins.xml"
+
     # Create directory if missing
     if [[ ! -d ${pkpAppDownloads_plugins} ]]; then
         mkdir ${pkpAppDownloads_plugins}
     fi
-    
+
     # If: exists -remove plugins subfolder
     if [[ -d ${pkpAppDownloads_plugins}/plugins ]]; then
-        rm -R ${pkpAppDownloads_plugins}
+        rm -R ${pkpAppDownloads_plugins}/plugins
     fi
-    
 
     # If: plugins.xml file exists and is no more than one day old
     ## Read cached API data
     if [[ -f ${pkpAppPluginsXml} ]] && [[ $(date -r ${pkpAppPluginsXml} +%s) > $(date -d "now -1 day" +%s) ]]; then
 
-        echo "Reading cached plugins data from ${pkpAppPluginsXml}"        
-        
+        echo "Reading cached plugins data from ${pkpAppPluginsXml}"
+
     else
 
-        echo "Downloading plugins.xml file"
-        wget --directory-prefix=$pkpAppDownloads_plugins ${pluginsUrl}
-        
+        if [[ -f ${pkpAppPluginsXml} ]]; then
+            echo "Removing ${pkpAppPluginsXml}"
+            rm ${pkpAppPluginsXml}
+        fi
+
+        echo "Downloading plugins.xml file to ${pkpAppPluginsXml}"
+        wget --directory-prefix=${pkpAppDownloadsPath} ${pluginsUrl}
+
     fi
 
     for key in "${!customPlugins[@]}"; do
 
         parseOutput emphasis "Processing plugin: ${key}"
 
-        local pluginPath="${customPlugins["$key"]}"
+        pluginCategory="${customPlugins["$key"]}"
         declare -a plugin_Urls
         declare -gA plugins_missingVersion
 
@@ -427,7 +495,7 @@ function download_customPlugins {
         plugin_Urls+=($(xmlstarlet sel -t -m "${xpath_match}" -v ${xpath_valueOf} -n ${pkpAppPluginsXml}))
 
         plugin_numberOfVersions="${#plugin_Urls[@]}"
-        
+
         # If: no URLs - add to array to display in a list of missing plugin versions
         if [[ ${plugin_numberOfVersions} = 0 ]]; then
 
@@ -440,7 +508,7 @@ function download_customPlugins {
         elif [[ ${plugin_numberOfVersions} = 1 ]]; then
 
             downloadPluginReleaseFile ${key} ${plugin_Urls[0]}
-            prepare_customPlugins ${key} ${plugin_Urls[0]}
+            prepare_customPlugins ${key}  ${plugin_Urls[0]}
 
         # If: multiple URLs > download the last one
         else
@@ -456,11 +524,12 @@ function download_customPlugins {
     done
 
     
-    parseOutput title "Plugins with no version for ${pkpAppVersion}"
+    parseOutput title "Plugins with no version for ${pkpAppUpgradeVersion}"
     for plugin in "${!plugins_missingVersion[@]}"; do
         echo -e "\t${plugin} -> ${plugins_missingVersion["${plugin}"]}"       
     done
 
+    parseOutput note "From ${#customPlugins[@]} custom plugins, ${#plugins_missingVersion[@]} do not have version available for ${pkpAppUpgradeVersion}."
 }
 
 function downloadPluginReleaseFile() {
@@ -477,7 +546,9 @@ function downloadPluginReleaseFile() {
         echo -e "\tDownloading ${plugin_downloadUrl} to ${pkpAppDownloads_plugins}"
         wget --directory-prefix=${pkpAppDownloads_plugins} ${plugin_downloadUrl}
     fi
+
 }
+
 
 function prepare_customPlugins {
 
@@ -490,59 +561,74 @@ function prepare_customPlugins {
     tar -xzf ${pkpAppDownloads_plugins}/${plugin_fileName} -C ${pkpAppDownloads_plugins}
 
     # Parse plugin version file
-    pluginType="$(cat $plugin_versionFile | grep -v 'DOCTYPE version' | xmlstarlet sel -t -m "/version" -v type -n)"
+    pluginType="$(cat $plugin_versionFile | grep -v '<!DOCTYPE' | xmlstarlet sel  -t -v '//version/type' -n)"
     
     # If directory does not exist - create it
     local plugin_directoryPath="${pkpAppDownloads_plugins}/$(echo ${pluginType} | tr '.' '/')"
     if [[ ! -d ${plugin_directoryPath} ]]; then
         mkdir -p ${plugin_directoryPath}
     fi
-    # Move them to ${pkpAppDownloads}/plugins-${pkpAppVersion} 
+    # Move them to ${pkpAppDownloadsPath}/plugins-${pkpAppVersion} 
     mv ${pkpAppDownloads_plugins}/${plugin_name} ${plugin_directoryPath}
+
 }
 
-function prepare_missingCustomPlugins {
 
-    parseOutput title "Preparing plugins with manualy downloaded release file for ${pkpAppVersion}"
-    
-#    local plugin_name="${1}"
+function prepare_missingCustomPlugins() {
 
-    for plugin in "${!plugins_missingVersion[@]}"; do
+    parseOutput title "Preparing plugins with manualy downloaded release file for ${pkpAppUpgradeVersion}"
 
-        # Find the correct release file
+    for plugin in ${1}; do
+        parseOutput emphasis "Processing plugin: ${plugin}"
         local plugin_name="${plugin}"
-        local plugin_filePath="$(find ${pkpAppDownloads_plugins} -type f -name "${plugin_name}*")"
+        local plugin_filePath="$(find ${pkpAppDownloads_plugins} -type f -name "${plugin_name}*.tar.gz")"
         local plugin_fileName="$(basename ${plugin_filePath})"
         local plugin_versionFile="${pkpAppDownloads_plugins}/${plugin_name}/version.xml"
 
+        # Test run
+        if [[ -n $testRun ]]; then
+            parseOutput emphasis "Initial variables:"
+            echo "Parameters passed to function: ${1}"
+            echo "plugin_filePath: ${plugin_filePath}"
+            echo "plugin_fileName: ${plugin_fileName}"
+            echo "plugin_versionFile: ${plugin_versionFile}"
+        fi
+        if [[ -z ${plugin_filePath} ]]; then
+            parseOutput warning "Plugin release file not found. You need to download the file manualy"
+            continue
+        fi
         # Unpack the plugin files
         tar -xzf ${pkpAppDownloads_plugins}/${plugin_fileName} -C ${pkpAppDownloads_plugins}
 
         # Parse plugin version file
-        pluginType="$(cat $plugin_versionFile | grep -v 'DOCTYPE version' | xmlstarlet sel -t -m "/version" -v type -n)"
+        pluginType="$(cat $plugin_versionFile | grep -v '<!DOCTYPE' | xmlstarlet sel  -t -v '//version/type' -n)"
 
         # If directory does not exist - create it
         local plugin_directoryPath="${pkpAppDownloads_plugins}/$(echo ${pluginType} | tr '.' '/')"
-        if [[ ! -d ${plugin_directoryPath} ]]; then
+        if [[ ! -d ${plugin_directoryPath} ]] && [[ -z $testRun ]]; then
             mkdir -p ${plugin_directoryPath}
         fi
         # Move them to ${pkpAppDownloads}/plugins-${pkpAppVersion} 
-        mv ${pkpAppDownloads_plugins}/${plugin_name} ${plugin_directoryPath}
+        if [[ -z $testRun ]]; then
+            mv ${pkpAppDownloads_plugins}/${plugin_name} ${plugin_directoryPath}
+        fi
+
+        if [[ -n $testRun ]]; then
+            parseOutput emphasis "Commands and variables"
+            echo "tar -xzf ${pkpAppDownloads_plugins}/${plugin_fileName} -C ${pkpAppDownloads_plugins}"
+            echo "pluginType: ${pluginType}"
+            echo "mkdir -p ${plugin_directoryPath}"
+            echo "mv ${pkpAppDownloads_plugins}/${plugin_name} ${plugin_directoryPath}"
+        fi
     done
-}
-
-
-
-function upgradePkpApp {
-
-    # Upgrade PKP application
-    cd ${pkpAppCodePath}
-    sed 's/installed = On/installed = Off/' -i config.inc.php
-    sudo -u ${pkpAppPhpPoolUser} php tools/upgrade.php upgrade
-    sed 's/installed = Off/installed = On/' -i config.inc.php
 
 }
 
+function testing() {
+
+    echo $testRun
+
+}
 
 function convertsecs() {
   ((h=${1}/3600))
@@ -554,15 +640,6 @@ function convertsecs() {
 ##
 ##  Functions below are not yet ported or tested with pkp-manager scripts
 ##
-
-# function checkIfLocaleSet {
-#     # Checks if $ompLocale variable is set and exit if not
-#     if [[ -z $ompLocale ]]; then
-#         echo -e "The variable \e[3mompLocale\e[0m must have a value!"
-#         exit 1
-#     fi
-# }
-
 # 
 # function checkOMPVersionPackage {
 # 
@@ -579,7 +656,7 @@ function convertsecs() {
 #             rm -R ${omara}/downloads/${pkpAppName}-${pkpAppVersion}
 #         fi
 #         
-#         # Extract files from $ompVersion to ${pkpAppDownloads}/
+#         # Extract files from $ompVersion to ${pkpAppDownloadsPath}/
 #         echo -e "Extracting version $ompVersion code \n"
 #         tar -xzf ${omara}/downloads/${pkpAppName}-${pkpAppVersion}.tar.gz -C ${omara}/downloads
 # 
@@ -718,6 +795,10 @@ white=$'\e[0;37m'
 
     warning)
       echo -e "\n${magenta}${italic}" "${2}" "${reset}\n"
+    ;;
+
+    note)
+      echo -e "\n${purple}${italic}" "${2}" "${reset}\n"
     ;;
 
   esac

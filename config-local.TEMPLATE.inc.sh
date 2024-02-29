@@ -1,40 +1,56 @@
+# List of available applications
+# all 'case' options below, except 'host'
+# do not forget to sync if adding new application!
+list_availablePkpApps=( )
+
 # Host and Application specific variables
 case "$1" in
 
+# Host configuration
     host)
         pkpRootPath=""
-        pkpBackupRootPath="${pkpRootPath}/backup"
-        pkpWebRootPath="${pkpRootPath}/www"
-        pkpConfigFilePath="${pkpRootPath}/config-files/${pkpApp}"
+        pkpWebRootPath=""
+        pkpStorage="${pkpRootPath}/${pkpApp}/storage"
+        pkpAppBackupPath="${pkpRootPath}/${pkpApp}/backup"
 
-        backupServerSSHKey=""
-        backupServerUser=""
-        backupServerDirectory=""
-
-        pkpStorage="${pkpRootPath}/storage"
+        pkpConfigFilePath="${pkpStorage}/${pkpApp}/config-files"
 
         # Database settings
         pkpAppDatabaseUser=""
         pkpAppDatabasePassword=""
     ;;
-    
-    ojs)
+
+# Apps configuration
+    app1)
+        pkpAppName=""
         appWebRootDirName=""
-        appCodePath="${pkpApp}"
+        appCodePath=""
         appDataPath=""
+
         pkpAppDatabaseName=""
-        pkpAppTestURL=""
-        pkpAppCodePath=""
-        pkpAppDataPath=""
-        pkpAppBackupRootPath=""
+        pkpAppDatabaseUser=""
+        pkpAppDatabasePassword=""
+        
+        pkpAppPhpPoolUser=""
+        pkpAppPhpPoolGroup=""
     ;;
-    
-    omp)
+
+    app2)
+        pkpAppName=""
         appWebRootDirName=""
-        appCodePath="${pkpApp}"
+        appCodePath=""
         appDataPath=""
+        
         pkpAppDatabaseName=""
-        pkpAppTestURL=""
+        pkpAppDatabaseUser=""
+        pkpAppDatabasePassword=""
+
+        pkpAppPhpPoolUser=""
+        pkpAppPhpPoolGroup=""
     ;;
 
 esac
+
+# Comon (generated) variables
+pkpAppCodePath="${pkpWebRootPath}/${appWebRootDirName}/${appCodePath}"
+pkpAppDataPath="${pkpWebRootPath}/${appWebRootDirName}/${appDataPath}"
