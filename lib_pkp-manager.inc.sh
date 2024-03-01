@@ -364,6 +364,22 @@ function prepare_upgradeVersionCode() {
     sudo -u ${pkpAppPhpPoolUser} php tools/upgrade.php check
 }
 
+function prepare_upgradePackage {
+
+    if [[ -d ${pkpAppNewCodePath} ]]; then
+      rm -R ${pkpAppNewCodePath}
+    fi
+
+    echo "Copying version ${pkpAppUpgradeVersion} code to ${pkpAppNewCodePath} directory"
+    cp -R ${pkpAppDownloadsPath}/${pkpAppName}-${pkpAppUpgradeVersion} ${pkpAppNewCodePath}/
+
+    # Copy files from local instance to upgrade version
+    cp ${pkpAppCodePath}/.htaccess ${pkpAppNewCodePath}/    
+
+    chmod -R 777 ${pkpAppNewCodePath}
+
+}
+
 function prepare_upgradeVersionPlugins {
 
     if [[ -d ${pkpAppDownloads_plugins}/plugins ]]; then
