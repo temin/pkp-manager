@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# To-Do:
+# * Check if app's config file variable files_dir is same as $pkpAppDataPath (config-local.inc.sh)
+
 # Get the Functions Library
 source lib_pkp-manager.inc.sh
 
@@ -137,6 +140,13 @@ case "$subcommand" in
         checkIf_pkpAppUpgradeVersion
         prepare_upgradeVersionCode
         upgradePkpApp
+    ;;
+
+    prepare-core-package)
+        checkIfRoot "${subcommand}"
+        checkIf_pkpAppUpgradeVersion
+        prepare_upgradePackage
+#         makeUpgradePackage
     ;;
 
     prepare-upgrade-plugins)
