@@ -44,10 +44,9 @@ while getopts ":a:v:u:l:d:t" opt; do
         ;;
 
         d)  # --database / Use full or trimmed database
+            # you can use multiple -d optopns: -d latest -d full
             if [[ $OPTARG =~ ^(full|trim)$ ]]; then
                 syncDatabaseVersion="$OPTARG"
-            elif [[ $OPTARG = 'latest' ]]; then
-                databaseBackupDate="$OPTARG"
             elif [[ $OPTARG =~ ^20[0-9]{6}-[0-9]$ ]]; then 
                 databaseBackupDate="$OPTARG"
             else
@@ -91,6 +90,17 @@ case "$subcommand" in
     ;;
 
     finish-sync)
+
+        checkIfRoot "${subcommand}"
+        emptyDatabase
+        importDatabase
+        copyConfigurationFiles
+        fixCodeFilePermissions
+        fixDataFilePermissions
+
+    ;;
+
+    revert-upgrade)
     
         checkIfRoot "${subcommand}"
         emptyDatabase
@@ -135,10 +145,16 @@ case "$subcommand" in
         download_customPlugins
     ;;
 
+    upgrade-check)
+        checkIfRoot "${subcommand}"
+        checkIf_pkpAppUpgradeVersion
+        upgrade_check
+    ;;
+
     upgrade-core)
         checkIfRoot "${subcommand}"
         checkIf_pkpAppUpgradeVersion
-        prepare_upgradeVersionCode
+#         prepare_upgradeVersionCode
         upgradePkpApp
     ;;
 
@@ -188,11 +204,12 @@ case "$subcommand" in
         fixCodeFilePermissions
         fixDataFilePermissions
     ;;
-    
+
     test)
-        checkUpgradePkpApp
+        echo "$syncDatabaseVersion"
+        echo "$databaseBackupDate"
     ;;
-    
+
     *)
         echo "The subcommand is missing!"
         exit 1

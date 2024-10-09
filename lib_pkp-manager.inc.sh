@@ -230,6 +230,9 @@ function importDatabase {
 
         zcat ${mysqlDump_fileName} \
             | sed '/INSERT INTO `metrics`/d' \
+            | sed '/INSERT INTO `metrics_issue`/d' \
+            | sed '/INSERT INTO `metrics_submission`/d' \
+            | sed '/INSERT INTO `metrics_submission_geo_daily`/d' \
             | sed '/INSERT INTO `submission_search_object_keywords`/d' \
             | mysql -u $pkpAppDatabaseUser -p$pkpAppDatabasePassword ${pkpAppDatabaseName}
     fi
@@ -335,20 +338,24 @@ function prepare_upgradeVersionCode() {
     echo "Copying version ${pkpAppUpgradeVersion} code to ${pkpAppNewCodePath} directory"
     cp -R ${pkpAppDownloadsPath}/${pkpAppName}-${pkpAppUpgradeVersion} ${pkpAppNewCodePath}/
     
+    echo "Copying files from ${pkpAppCodePath} to ${pkpAppNewCodePath} directory"
     # Copy files from local instance to upgrade version
     cp ${pkpAppConfigFilePath}/config.inc.php.${pkpAppUpgradeVersion} ${pkpAppNewCodePath}/config.inc.php
     cp ${pkpAppCodePath}/.htaccess ${pkpAppNewCodePath}/
     cp -R ${pkpAppCodePath}/public ${pkpAppNewCodePath}/
+    cp -R ${pkpAppCodePath}/robots.txt ${pkpAppNewCodePath}/
     
     if [[ -d ${pkpAppCodePath}.old ]]; then
+      echo "Deleting existing '.old' code."
       rm -R ${pkpAppCodePath}.old
     fi
     
+    echo "Switching code in web root from $pkpAppVersion to ${pkpAppUpgradeVersion}."
     mv ${pkpAppCodePath} ${pkpAppCodePath}.old
     mv ${pkpAppNewCodePath} ${pkpAppCodePath}
     chmod -R 777 ${pkpAppCodePath}
 
-    # Checking for files that previously caused erros during upgrade
+    # Checking for files that previously caused errors during upgrade
     declare -a checkDirectory
     checkDirectory+=("${pkpAppDataPath}/usageStats/reject")
     checkDirectory+=("${pkpAppDataPath}/usageStats/usageEventLogs")
@@ -359,9 +366,17 @@ function prepare_upgradeVersionCode() {
         fi
     done
 
-    parseOutput emphasis1 "Checking the upgrade"
-    cd ${pkpAppCodePath}
-    sudo -u ${pkpAppPhpPoolUser} php tools/upgrade.php check
+     parseOutput emphasis1 "Checking the upgrade"
+     cd ${pkpAppCodePath}
+     sudo -u ${pkpAppPhpPoolUser} php tools/upgrade.php check
+}
+
+function upgrade_check {
+
+     parseOutput emphasis1 "Checking the upgrade"
+     cd ${pkpAppCodePath}
+     sudo -u ${pkpAppPhpPoolUser} php tools/upgrade.php check
+     
 }
 
 function prepare_upgradePackage {
